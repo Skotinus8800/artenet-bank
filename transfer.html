@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ARTEnet Bank — Перевод</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%);
+        min-height: 100vh;
+      }
+      .transfer-card {
+        background: #fff;
+        border-radius: 1.5rem;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        padding: 2rem 2.5rem;
+        margin: 2rem auto;
+        max-width: 420px;
+      }
+      .bank-account {
+        font-family: monospace;
+        font-size: 1.1rem;
+        color: #64748b;
+      }
+      .modal-backdrop.show { opacity: 0.2; }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary shadow-sm">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="../bank.html">
+          <img src="../../photos/logo-color-2.png" alt="ARTEnet" height="32" class="d-inline-block align-text-top me-2">
+          ARTEnet Bank
+        </a>
+        <div class="collapse navbar-collapse">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link" href="../bank.html">Банк</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="../../main.html">Главная</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="../bank.html">← Вернуться в начало</a>
+            </li>
+          </ul>
+          <span class="navbar-text me-3" id="user-id"></span>
+          <form class="d-flex" id="logout-form">
+            <button class="btn btn-outline-danger" type="submit">Выйти</button>
+          </form>
+        </div>
+      </div>
+    </nav>
+    <div id="liveAlertPlaceholder" class="position-fixed" style="z-index:1080; top:1rem; right:1rem; max-width:350px;"></div>
+    <main class="d-flex flex-column align-items-center justify-content-center" style="min-height:80vh;">
+      <div class="transfer-card text-center">
+        <h3 class="mb-4">Перевод между счетами</h3>
+        <form id="transferForm" autocomplete="off">
+          <div class="mb-3 text-start">
+            <label for="fromAccount" class="form-label">Счёт списания</label>
+            <select class="form-select" id="fromAccount" required></select>
+          </div>
+          <div class="mb-3 text-start">
+            <label for="toAccount" class="form-label">Номер счёта получателя</label>
+            <input type="text" class="form-control" id="toAccount" required pattern="\d{4}-\d{4}-\d{4}" placeholder="XXXX-XXXX-XXXX">
+            <div class="form-text" id="receiverName"></div>
+          </div>
+          <div class="mb-3 text-start">
+            <label for="amount" class="form-label">Сумма</label>
+            <input type="number" class="form-control" id="amount" min="0.01" step="0.01" required placeholder="0.00">
+          </div>
+          <div class="mb-3 text-start">
+            <label for="comment" class="form-label">Комментарий к переводу (необязательно)</label>
+            <input type="text" class="form-control" id="comment" maxlength="100" placeholder="Назначение платежа">
+          </div>
+          <div class="mb-3 text-start">
+            <label class="form-label">Комиссия</label>
+            <div id="feeInfo" class="text-secondary">—</div>
+          </div>
+          <button type="submit" class="btn btn-success w-100">Отправить</button>
+        </form>
+      </div>
+    </main>
+
+    <footer class="bg-body-tertiary text-center text-lg-start mt-4 border-top">
+      <div class="container p-3">
+        <div class="row align-items-center">
+          <div class="col-lg-6 text-lg-start text-center mb-2 mb-lg-0">
+            <span class="fw-bold">ARTEnet &copy; 2025</span>
+          </div>
+          <div class="col-lg-6 text-lg-end text-center">
+            <a href="mailto:ltartenet@gmail.com" class="text-decoration-none text-secondary me-3">Поддержка</a>
+            <a href="#" class="text-decoration-none text-secondary disabled">Политика конфиденциальности</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+    <script src="../../js/currency-converter.js"></script>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+      import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+      import { getDatabase, ref, get, update, runTransaction, push } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyBZkU-HmTgsFV7McrsDr-Q5WkEBxkA2SD0",
+        authDomain: "artenetshop-7b884.firebaseapp.com",
+        projectId: "artenetshop-7b884",
+        storageBucket: "artenetshop-7b884.appspot.com",
+        messagingSenderId: "542098227452",
+        appId: "1:542098227452:web:ce14dfbbbd7ca0d34b5779",
+        measurementId: "G-8PDLBR77YN",
+        databaseURL: "https://artenetshop-7b884-default-rtdb.europe-west1.firebasedatabase.app"
+      };
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getDatabase(app);
+
+      const alertPlaceholder = document.getElementById('liveAlertPlaceholder');
+      function appendAlert(message, type = 'info') {
+        const wrapper = document.createElement('div');
+        wrapper.className = `alert alert-${type} alert-dismissible fade show`;
+        wrapper.role = 'alert';
+        wrapper.innerHTML = `
+          <div>${message}</div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        alertPlaceholder.append(wrapper);
+        setTimeout(() => {
+          wrapper.classList.remove("show");
+          setTimeout(() => wrapper.remove(), 150);
+        }, 7000);
+      }
+
+      let currentUser = null;
+      let feePercent = 1.5; // по умолчанию 1.5%
+      let userAccounts = [];
+
+      // Инициализация конвертера с базой данных
+      if (window.currencyConverter) {
+        window.currencyConverter.initDatabase(db);
+        window.currencyConverter.dbPath = 'bank/currencies'; // Жёстко фиксируем путь
+        window.currencyConverter.loadRatesFromAdmin();
+        window.currencyConverter.loadConversionTax();
+      }
+
+      onAuthStateChanged(auth, async (user) => {
+        if (!user || !user.emailVerified) {
+          window.location.href = "../../index.html";
+          return;
+        }
+        currentUser = user;
+        document.getElementById('user-id').textContent = user.email || user.uid;
+        
+        // Загрузить настройки комиссии
+        const settingsSnap = await get(ref(db, 'bank/settings'));
+        if (settingsSnap.exists()) {
+          feePercent = settingsSnap.val().feePercent || 1.5;
+        }
+        
+        // Получить счета пользователя
+        const accsSnap = await get(ref(db, `bank/accounts/${user.uid}/accounts`));
+        const fromAccountSelect = document.getElementById('fromAccount');
+        fromAccountSelect.innerHTML = '';
+        userAccounts = [];
+        if (accsSnap.exists()) {
+          for (const [accId, acc] of Object.entries(accsSnap.val())) {
+            userAccounts.push({ id: accId, ...acc });
+            const option = document.createElement('option');
+            option.value = accId;
+            option.textContent = `${acc.currency} (${(acc.balance||0).toFixed(2)}) [${acc.accountNumber}]`;
+            fromAccountSelect.appendChild(option);
+          }
+        } else {
+          fromAccountSelect.innerHTML = '<option disabled>Нет доступных счетов</option>';
+        }
+      });
+
+      // Блок для информации о переводе
+      const transferInfoBlock = document.createElement('div');
+      transferInfoBlock.className = 'mt-2';
+      document.getElementById('feeInfo').parentNode.appendChild(transferInfoBlock);
+
+      // Динамическое обновление информации о переводе
+      async function updateTransferInfo() {
+        const fromAccountId = document.getElementById('fromAccount').value;
+        const fromAccount = userAccounts.find(a => a.id === fromAccountId);
+        const toAccountRaw = document.getElementById('toAccount').value;
+        const toAccount = toAccountRaw.replace(/-/g, '');
+        const amount = parseFloat(document.getElementById('amount').value);
+        const receiverNameDiv = document.getElementById('receiverName');
+        let infoHtml = '';
+        let valid = false;
+        let toCurrency = '';
+        let toName = '';
+        let toAccObj = null;
+        
+        // Поиск получателя
+        if (toAccount.length === 12) {
+          const accsSnap = await get(ref(db, 'bank/accounts'));
+          if (accsSnap.exists()) {
+            for (const [uid, userAccs] of Object.entries(accsSnap.val())) {
+              if (userAccs.accounts) {
+                for (const [accId, acc] of Object.entries(userAccs.accounts)) {
+                  if (String(acc.accountNumber) === toAccount) {
+                    toCurrency = acc.currency || 'EUR';
+                    toName = (acc.firstName || '') + ' ' + (acc.lastName || '');
+                    toAccObj = acc;
+                    valid = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (valid && toName.trim()) {
+          receiverNameDiv.innerHTML = `<span class="text-success">✓ ${toName.trim()}</span>`;
+        } else if (toAccount.length === 12) {
+          receiverNameDiv.innerHTML = '<span class="text-warning">⚠ Счёт найден, но имя не указано</span>';
+        } else {
+          receiverNameDiv.innerHTML = '';
+        }
+
+        if (fromAccount && valid && amount > 0) {
+          const fromCurrency = fromAccount.currency || 'EUR';
+          
+          // Расчет комиссии и конвертации
+          const bankFee = (amount * feePercent) / 100;
+          let conversionInfo = 'Без конвертации';
+          
+          if (fromCurrency !== toCurrency) {
+            try {
+              // Предварительный расчёт без перевода в резервный счет
+              const conversion = await window.currencyConverter.convertWithFee(amount, fromCurrency, toCurrency, null, false);
+              const convertedAmount = conversion.convertedAmount;
+              const conversionFee = conversion.fee;
+              conversionInfo = `Курс: ${conversion.rate.toFixed(4)} (${fromCurrency}→${toCurrency})`;
+
+              // Итоговая сумма к списанию: исходная сумма + комиссия банка
+              const totalWithFees = amount + bankFee;
+
+              infoHtml = `
+                <div class="border rounded p-2 bg-light">
+                  <div class="row">
+                    <div class="col-6">
+                      <small class="text-muted">Сумма:</small><br>
+                      <strong>${amount.toFixed(2)} ${fromCurrency}</strong>
+                    </div>
+                    <div class="col-6">
+                      <small class="text-muted">Комиссия банка:</small><br>
+                      <strong class="text-danger">${bankFee.toFixed(2)} ${fromCurrency}</strong>
+                    </div>
+                  </div>
+                  ${conversionInfo}
+                  <div class="mt-2 pt-2 border-top">
+                    <small class="text-muted">Итого к списанию:</small><br>
+                    <strong class="text-primary">${totalWithFees.toFixed(2)} ${fromCurrency}</strong>
+                  </div>
+                  <div class="mt-1">
+                    <small class="text-muted">Получит:</small><br>
+                    <strong class="text-success">${convertedAmount.toFixed(2)} ${toCurrency}</strong>
+                  </div>
+                </div>
+              `;
+            } catch (error) {
+              console.error('Ошибка конвертации:', error);
+            }
+          } else {
+            // Перевод в той же валюте - без конвертации
+            const totalWithFees = amount + bankFee;
+            infoHtml = `
+              <div class="border rounded p-2 bg-light">
+                <div class="row">
+                  <div class="col-6">
+                    <small class="text-muted">Сумма:</small><br>
+                    <strong>${amount.toFixed(2)} ${fromCurrency}</strong>
+                  </div>
+                  <div class="col-6">
+                    <small class="text-muted">Комиссия банка:</small><br>
+                    <strong class="text-danger">${bankFee.toFixed(2)} ${fromCurrency}</strong>
+                  </div>
+                </div>
+                <div class="mt-2 pt-2 border-top">
+                  <small class="text-muted">Итого к списанию:</small><br>
+                  <strong class="text-primary">${totalWithFees.toFixed(2)} ${fromCurrency}</strong>
+                </div>
+                <div class="mt-1">
+                  <small class="text-muted">Получит:</small><br>
+                  <strong class="text-success">${amount.toFixed(2)} ${toCurrency}</strong>
+                </div>
+              </div>
+            `;
+          }
+        }
+
+        transferInfoBlock.innerHTML = infoHtml;
+      }
+      
+      document.getElementById('toAccount').addEventListener('input', updateTransferInfo);
+      document.getElementById('fromAccount').addEventListener('change', updateTransferInfo);
+      document.getElementById('amount').addEventListener('input', updateTransferInfo);
+
+      // Автоматическое форматирование номера счёта
+      function formatAccountNumberInput(input) {
+        let value = input.value.replace(/\D/g, '');
+        if (value.length > 12) value = value.substring(0, 12);
+        if (value.length >= 8) {
+          value = value.substring(0, 4) + '-' + value.substring(4, 8) + '-' + value.substring(8);
+        } else if (value.length >= 4) {
+          value = value.substring(0, 4) + '-' + value.substring(4);
+        }
+        input.value = value;
+      }
+      
+      document.getElementById('toAccount').addEventListener('input', function() {
+        formatAccountNumberInput(this);
+        updateTransferInfo();
+      });
+
+      // Модалка подтверждения перевода
+      let confirmModal = document.getElementById('confirmTransferModal');
+      if (!confirmModal) {
+        confirmModal = document.createElement('div');
+        confirmModal.className = 'modal fade';
+        confirmModal.id = 'confirmTransferModal';
+        confirmModal.tabIndex = -1;
+        confirmModal.innerHTML = `
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Подтвердите перевод</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+              </div>
+              <div class="modal-body" id="confirmTransferBody"></div>
+              <div class="modal-body border-top">
+                <div class="mb-2">
+                  <label class="form-label">Введите пароль для подтверждения</label>
+                  <input type="password" class="form-control" id="confirmPassword" required>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-success" id="confirmTransferBtn">
+                  <span id="confirmBtnText">Подтвердить</span>
+                  <span id="confirmBtnSpinner" class="spinner-border spinner-border-sm ms-2" style="display:none;"></span>
+                </button>
+              </div>
+            </div>
+          </div>`;
+        document.body.appendChild(confirmModal);
+      }
+
+      // Перехват submit для показа модалки
+      document.getElementById('transferForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const fromAccountId = document.getElementById('fromAccount').value;
+        const fromAccount = userAccounts.find(a => a.id === fromAccountId);
+        const toAccountRaw = document.getElementById('toAccount').value;
+        const toAccount = toAccountRaw.replace(/-/g, '');
+        const amount = parseFloat(document.getElementById('amount').value);
+        
+        if (!fromAccountId || !fromAccount || !toAccount || isNaN(amount) || amount <= 0) {
+          appendAlert('Введите корректные данные!', 'warning');
+          return;
+        }
+
+        // Найти получателя
+        const accsSnap = await get(ref(db, 'bank/accounts'));
+        let toUid = null, toAccountKey = null, toAcc = null, toCurrency = '', toName = '';
+        
+        if (accsSnap.exists()) {
+          for (const [uid, userAccs] of Object.entries(accsSnap.val())) {
+            if (userAccs.accounts) {
+              for (const [accId, acc] of Object.entries(userAccs.accounts)) {
+                if (String(acc.accountNumber) === toAccount) {
+                  toUid = uid;
+                  toAccountKey = accId;
+                  toAcc = acc;
+                  toCurrency = acc.currency || 'EUR';
+                  toName = (acc.firstName || '') + ' ' + (acc.lastName || '');
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        if (!toUid || !toAccountKey) {
+          appendAlert('Счёт получателя не найден', 'danger');
+          return;
+        }
+
+        // Расчет комиссии и конвертации
+        const fromCurrency = fromAccount.currency || 'EUR';
+        // Комиссия банка считается от исходной суммы
+        const bankFee = (amount * feePercent) / 100;
+        let convertedAmount = amount;
+        let conversionFee = 0;
+        let conversionInfo = 'Без конвертации';
+        
+        if (fromCurrency !== toCurrency) {
+          try {
+            // Полная конвертация с переводом в резервный счет
+            const conversion = await window.currencyConverter.convertWithFee(amount, fromCurrency, toCurrency, currentUser.uid, true);
+            convertedAmount = conversion.convertedAmount;
+            conversionFee = conversion.fee;
+            conversionInfo = `Курс: ${conversion.rate.toFixed(4)} (${fromCurrency}→${toCurrency})`;
+          } catch (error) {
+            appendAlert('Ошибка конвертации валют', 'danger');
+            return;
+          }
+        }
+
+        // Итоговая сумма к списанию: исходная сумма + комиссия банка
+        const total = amount + bankFee;
+        
+        if (fromAccount.balance < total) {
+          appendAlert('Недостаточно средств с учётом комиссии!', 'danger');
+          return;
+        }
+
+        const comment = document.getElementById('comment').value.trim();
+
+        // Сформировать инфо для подтверждения
+        let confirmHtml = `<div class='border rounded p-3 bg-light'>
+          <div class='text-center mb-3'>
+            <h5 class='mb-1'>Банковский перевод</h5>
+            <small class='text-secondary'>${new Date().toLocaleString()}</small>
+          </div>
+          <table class='table table-sm table-borderless mb-0'>
+            <tr><td><b>От:</b></td><td>${formatAccountNumber(fromAccount.accountNumber)} (${fromCurrency})</td></tr>
+            <tr><td><b>Кому:</b></td><td>${toAccountRaw} (${toCurrency})</td></tr>
+            <tr><td><b>Получатель:</b></td><td>${toName}</td></tr>
+            ${comment ? `<tr><td><b>Комментарий:</b></td><td>${comment}</td></tr>` : ''}
+            <tr class='border-top'><td><b>Сумма:</b></td><td><span class='fs-5'>${amount.toFixed(2)} ${fromCurrency}</span></td></tr>
+            <tr><td><b>Комиссия банка:</b></td><td>${bankFee.toFixed(2)} ${fromCurrency}</td></tr>
+            ${conversionFee > 0 ? `<tr><td><b>Комиссия за конвертацию:</b></td><td>${conversionFee.toFixed(2)} ${toCurrency}</td></tr>` : ''}
+            <tr class='border-top'><td><b>Итого спишется:</b></td><td><span class='text-danger fs-5 fw-bold'>${total.toFixed(2)} ${fromCurrency}</span></td></tr>
+            <tr class='border-top'><td><b>Получит:</b></td><td><span class='text-success'>${convertedAmount.toFixed(2)} ${toCurrency}</span></td></tr>
+            <tr><td><b>Курс:</b></td><td><small>${conversionInfo}</small></td></tr>
+          </table>
+        </div>`;
+        
+        document.getElementById('confirmTransferBody').innerHTML = confirmHtml;
+        const modal = new bootstrap.Modal(document.getElementById('confirmTransferModal'));
+        modal.show();
+
+        // Подтверждение
+        document.getElementById('confirmTransferBtn').onclick = async function() {
+          const password = document.getElementById('confirmPassword').value;
+          if (!password) {
+            appendAlert('Введите пароль', 'warning');
+            return;
+          }
+          
+          const confirmBtn = document.getElementById('confirmTransferBtn');
+          const btnText = document.getElementById('confirmBtnText');
+          const btnSpinner = document.getElementById('confirmBtnSpinner');
+          
+          confirmBtn.disabled = true;
+          btnText.textContent = 'Обработка...';
+          btnSpinner.style.display = 'inline-block';
+          
+          try {
+            const { signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js');
+            await signInWithEmailAndPassword(auth, currentUser.email, password);
+            modal.hide();
+            
+            try {
+              await update(ref(db), {
+                [`bank/accounts/${currentUser.uid}/accounts/${fromAccountId}/balance`]: Math.round((fromAccount.balance - total) * 100) / 100,
+                [`bank/accounts/${toUid}/accounts/${toAccountKey}/balance`]: Math.round(((toAcc.balance || 0) + convertedAmount) * 100) / 100
+              });
+              
+              // Запись в историю операций
+              const now = Date.now();
+              const fromHistRef = ref(db, `bank/accounts/${currentUser.uid}/accounts/${fromAccountId}/history`);
+              const toHistRef = ref(db, `bank/accounts/${toUid}/accounts/${toAccountKey}/history`);
+              
+              await push(fromHistRef, {
+                type: 'transfer_out',
+                to: toAccount,
+                amount,
+                bankFee,
+                conversionFee,
+                total,
+                comment: comment || null,
+                date: now
+              });
+              
+              await push(toHistRef, {
+                type: 'transfer_in',
+                from: fromAccount.accountNumber,
+                amount: convertedAmount,
+                comment: comment || null,
+                date: now
+              });
+              
+              appendAlert('Перевод выполнен!', 'success');
+              document.getElementById('transferForm').reset();
+              document.getElementById('receiverName').innerHTML = '';
+              transferInfoBlock.innerHTML = '';
+            } catch (e) {
+              appendAlert('Ошибка перевода: ' + e.message, 'danger');
+            }
+          } catch (e) {
+            appendAlert('Неверный пароль', 'danger');
+          } finally {
+            confirmBtn.disabled = false;
+            btnText.textContent = 'Подтвердить';
+            btnSpinner.style.display = 'none';
+          }
+        };
+      };
+
+      document.getElementById("logout-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        signOut(auth)
+          .then(() => {
+            window.location.href = "../../index.html";
+          })
+          .catch((error) => {
+            appendAlert("Ошибка выхода: " + error.message, "danger");
+          });
+      });
+
+      // Функция форматирования номера счёта
+      function formatAccountNumber(num) {
+        if (!num) return '—';
+        return String(num).replace(/(\d{4})(\d{4})(\d{4})/, '$1-$2-$3');
+      }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html> 
