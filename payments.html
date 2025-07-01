@@ -952,6 +952,22 @@
           return;
         }
         
+        // --- ДОБАВЛЯЕМ ПАРАМЕТРЫ К URL ---
+        function buildReturnUrlWithParams() {
+          const params = new URLSearchParams({
+            amount: currentPayment.amount,
+            description: currentPayment.description,
+            paymentId: currentPayment.id
+          });
+          let redirectUrl = currentPayment.validatedReturnUrl;
+          if (redirectUrl.includes('?')) {
+            redirectUrl += '&' + params.toString();
+          } else {
+            redirectUrl += '?' + params.toString();
+          }
+          return redirectUrl;
+        }
+        
         // Запускаем таймер
         let countdown = 10;
         const countdownElement = document.getElementById('countdown');
@@ -963,7 +979,7 @@
           if (countdown <= 0) {
             clearInterval(timer);
             console.log('Автоматический переход по URL:', currentPayment.validatedReturnUrl);
-            window.location.href = currentPayment.validatedReturnUrl;
+            window.location.href = buildReturnUrlWithParams();
           }
         }, 1000);
         
@@ -995,7 +1011,7 @@
         
         // Используем уже валидированный URL
         if (currentPayment.validatedReturnUrl) {
-          window.location.href = currentPayment.validatedReturnUrl;
+          window.location.href = buildReturnUrlWithParams();
         } else {
           console.error('Валидированный URL отсутствует');
           appendAlert('Ошибка перехода по ссылке: неверный URL', 'danger');
