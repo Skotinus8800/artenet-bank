@@ -883,7 +883,7 @@
       e.preventDefault();
       try {
         await signOut(auth);
-        window.location.href = '../../main.html';
+        window.location.href = 'main.html';
       } catch (error) {
         console.error('Ошибка выхода:', error);
       }
@@ -910,7 +910,7 @@
           await loadUserAccounts();
         }
       } else {
-        window.location.href = '../../main.html';
+        window.location.href = 'main.html';
       }
     });
 
@@ -1023,7 +1023,7 @@
         if (window.successPaymentTimer) {
           clearInterval(window.successPaymentTimer);
         }
-        window.location.href = '../bank.html';
+        window.location.href = 'bank.html';
       });
     }
   </script>
