@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Онлайн-платежи — ARTEnet Bank</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .payment-card {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    }
+    .payment-header {
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      color: white;
+      border-radius: 20px 20px 0 0;
+      padding: 2rem;
+      text-align: center;
+    }
+    .payment-form {
+      padding: 2rem;
+    }
+    .fee-info {
+      color: #dc3545;
+      font-weight: bold;
+    }
+    .loading {
+      display: none;
+    }
+    .loading.show {
+      display: inline-block;
+    }
+    .payment-summary {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+    .btn-payment {
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      border: none;
+      color: white;
+      font-weight: bold;
+      padding: 12px 30px;
+      border-radius: 50px;
+      transition: all 0.3s ease;
+    }
+    .btn-payment:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+      color: white;
+    }
+    .invalid-link {
+      text-align: center;
+      padding: 3rem;
+    }
+    .invalid-link i {
+      font-size: 4rem;
+      color: #dc3545;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#">
+        <i class="bi bi-bank2"></i>
+        ARTEnet Bank — Онлайн-платежи
+      </a>
+      <div class="navbar-nav ms-auto">
+        <span class="navbar-text me-3" id="user-email"></span>
+        <form class="d-flex" id="logout-form">
+          <button class="btn btn-outline-danger" type="submit">Выйти</button>
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <div id="liveAlertPlaceholder" class="position-fixed" style="z-index:1080; top:1rem; right:1rem; max-width:350px;"></div>
+
+  <main class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <!-- Недействительная ссылка -->
+        <div id="invalidLink" class="payment-card" style="display: none;">
+          <div class="invalid-link">
+            <i class="bi bi-exclamation-triangle"></i>
+            <h3>Недействительная ссылка</h3>
+            <p class="text-muted">Данная ссылка для оплаты недействительна или истекла.</p>
+            <a href="bank.html" class="btn btn-primary">Вернуться в банк</a>
+          </div>
+        </div>
+
+        <!-- Форма платежа -->
+        <div id="paymentForm" class="payment-card" style="display: none;">
+          <div class="payment-header">
+            <h2 class="mb-2">
+              <i class="bi bi-credit-card"></i>
+              Оплата
+            </h2>
+            <p class="mb-0" id="paymentDescription">Загрузка информации о платеже...</p>
+          </div>
+
+          <div class="payment-form">
+            <!-- Информация о платеже -->
+            <div class="payment-info mb-4">
+              <div class="row">
+                <div class="col-md-6">
+                  <h6><i class="bi bi-receipt"></i> Информация о платеже</h6>
+                  <p><strong>Сумма:</strong> <span id="paymentAmount">0</span> <span id="paymentCurrency">EUR</span></p>
+                  <p><strong>Получатель:</strong> <span id="recipientName">Загрузка...</span></p>
+                  <p><strong>Описание:</strong> <span id="paymentDetails">Загрузка...</span></p>
+                </div>
+                <div class="col-md-6">
+                  <h6><i class="bi bi-wallet2"></i> Ваши счета</h6>
+                  <div id="userAccounts">
+                    <div class="text-center text-secondary">Загрузка счетов...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Форма подтверждения -->
+            <form id="paymentFormElement">
+              <div class="mb-3">
+                <label for="fromAccount" class="form-label">Счет для списания</label>
+                <select class="form-select" id="fromAccount" required>
+                  <option value="">Выберите счет</option>
+                </select>
+              </div>
+
+              <!-- Сводка платежа -->
+              <div class="payment-summary" id="paymentSummary" style="display: none;">
+                <h6><i class="bi bi-calculator"></i> Сводка платежа</h6>
+                <div class="row">
+                  <div class="col-md-6">
+                    <p><strong>Сумма:</strong> <span id="summaryAmount">0</span> <span id="summaryCurrency">EUR</span></p>
+                    <p><strong>Комиссия:</strong> <span id="summaryFee" class="fee-info">0</span> <span id="summaryFeeCurrency">EUR</span></p>
+                  </div>
+                  <div class="col-md-6">
+                    <p><strong>Итого к списанию:</strong> <span id="summaryTotal" class="fw-bold">0</span> <span id="summaryTotalCurrency">EUR</span></p>
+                    <p><strong>Баланс после:</strong> <span id="summaryBalance" class="text-success">0</span> <span id="summaryBalanceCurrency">EUR</span></p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-payment btn-lg" id="submitPaymentBtn">
+                  <span class="loading" id="loadingSpinner">
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                  </span>
+                  Оплатить
+                </button>
+                <a href="bank.html" class="btn btn-outline-secondary">Отмена</a>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Модалка подтверждения -->
+  <div class="modal fade" id="confirmPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Подтверждение платежа</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            Для подтверждения платежа введите пароль от вашего аккаунта
+          </div>
+          <div class="mb-3">
+            <label for="confirmPassword" class="form-label">Пароль</label>
+            <input type="password" class="form-control" id="confirmPassword" required>
+          </div>
+          <div id="confirmPaymentDetails"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="button" class="btn btn-success" id="confirmPaymentBtn">
+            <span class="loading" id="confirmLoadingSpinner">
+              <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            </span>
+            Подтвердить
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка успешной оплаты -->
+  <div class="modal fade" id="successPaymentModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">
+            <i class="bi bi-check-circle"></i>
+            Платеж выполнен успешно!
+          </h5>
+        </div>
+        <div class="modal-body text-center">
+          <div class="mb-4">
+            <i class="bi bi-check-circle text-success" style="font-size: 4rem;"></i>
+            <h4 class="mt-3">Оплата прошла успешно!</h4>
+            <p class="text-muted">Ваш платеж был обработан и подтвержден.</p>
+          </div>
+          
+          <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>Не закрывайте эту страницу!</strong> Дождитесь автоматического перенаправления.
+          </div>
+          
+          <div class="alert alert-light">
+            <h6>Детали платежа:</h6>
+            <p class="mb-1"><strong>Сумма:</strong> <span id="successAmount">0</span></p>
+            <p class="mb-1"><strong>Получатель:</strong> <span id="successRecipient">-</span></p>
+            <p class="mb-0"><strong>Описание:</strong> <span id="successDescription">-</span></p>
+          </div>
+          
+          <div id="returnUrlSection" style="display: none;">
+            <p class="text-muted">
+              <i class="bi bi-clock"></i>
+              Перенаправление через <span id="countdown">10</span> секунд...
+            </p>
+            <button type="button" class="btn btn-primary" id="goToReturnUrl">
+              <i class="bi bi-box-arrow-up-right"></i>
+              Перейти сейчас
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer" id="successModalFooter">
+          <button type="button" class="btn btn-secondary" id="goToBank">
+            <i class="bi bi-bank"></i>
+            Вернуться в банк
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js';
+    import { getDatabase, ref, get, set, push, update } from 'https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBZkU-HmTgsFV7McrsDr-Q5WkEBxkA2SD0",
+      authDomain: "artenetshop-7b884.firebaseapp.com",
+      projectId: "artenetshop-7b884",
+      storageBucket: "artenetshop-7b884.appspot.com",
+      messagingSenderId: "542098227452",
+      appId: "1:542098227452:web:ce14dfbbbd7ca0d34b5779",
+      measurementId: "G-8PDLBR77YN",
+      databaseURL: "https://artenetshop-7b884-default-rtdb.europe-west1.firebasedatabase.app"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    let currentUser = null;
+    let userAccounts = [];
+    let paymentSettings = {};
+    let currentPayment = null;
+
+    // Инициализация конвертера с базой данных
+    if (window.currencyConverter) {
+      window.currencyConverter.initDatabase(db);
+      window.currencyConverter.loadRatesFromAdmin();
+      window.currencyConverter.loadConversionTax();
+    }
+
+    // Функция для показа уведомлений
+    function appendAlert(message, type) {
+      const alertPlaceholder = document.getElementById('liveAlertPlaceholder');
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = [
+        `<div class="alert alert-${type} alert-dismissible" role="alert">`,
+        `   <div>${message}</div>`,
+        '   <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>',
+        '</div>'
+      ].join('');
+      alertPlaceholder.append(wrapper);
+      setTimeout(() => wrapper.remove(), 5000);
+    }
+
+    // Получение параметров из URL
+    function getUrlParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const params = {
+        paymentId: urlParams.get('payment'),
+        amount: urlParams.get('amount'),
+        currency: urlParams.get('currency'),
+        description: urlParams.get('description'),
+        recipient: urlParams.get('recipient'),
+        returnUrl: urlParams.get('return') || urlParams.get('returnUrl'), // Поддерживаем оба варианта
+        // Новые параметры для генерации ссылки
+        generate: urlParams.get('generate'),
+        toAccount: urlParams.get('toAccount')
+      };
+      
+      console.log('Параметры из URL:', params);
+      console.log('Полный URL:', window.location.href);
+      
+      return params;
+    }
+
+    // Генерация ссылки для платежа по параметрам
+    async function generatePaymentLink(params) {
+      try {
+        const paymentId = push(ref(db, 'bank/paymentLinks')).key;
+        
+        // Если указан номер счета получателя, найдем его данные
+        let recipientName = params.recipient || 'Неизвестный получатель';
+        if (params.toAccount) {
+          const accountsSnap = await get(ref(db, 'bank/accounts'));
+          if (accountsSnap.exists()) {
+            for (const [uid, userAccs] of Object.entries(accountsSnap.val())) {
+              if (userAccs.accounts) {
+                for (const [accId, acc] of Object.entries(userAccs.accounts)) {
+                  if (String(acc.accountNumber) === params.toAccount.replace(/-/g, '')) {
+                    recipientName = `${acc.firstName || ''} ${acc.lastName || ''}`.trim() || 'Неизвестный получатель';
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        await set(ref(db, `bank/paymentLinks/${paymentId}`), {
+          amount: parseFloat(params.amount) || 0,
+          currency: params.currency || 'EUR',
+          description: params.description || 'Платеж',
+          recipient: recipientName,
+          returnUrl: params.returnUrl || null,
+          toAccount: params.toAccount || null,
+          status: 'active',
+          createdAt: Date.now(),
+          createdBy: currentUser.uid
+        });
+
+        console.log('Создана ссылка для платежа:', {
+          paymentId,
+          returnUrl: params.returnUrl,
+          allParams: params
+        });
+
+        // Перенаправить на созданную ссылку
+        window.location.href = `?payment=${paymentId}`;
+      } catch (error) {
+        console.error('Ошибка генерации ссылки:', error);
+        appendAlert('Ошибка создания ссылки для платежа', 'danger');
+      }
+    }
+
+    // Проверка валидности ссылки платежа
+    async function validatePaymentLink() {
+      const params = getUrlParams();
+      
+      // Если это генерация ссылки
+      if (params.generate === 'true') {
+        await generatePaymentLink(params);
+        return false;
+      }
+      
+      if (!params.paymentId) {
+        showInvalidLink();
+        return false;
+      }
+
+      try {
+        // Проверить существование платежа в базе
+        const paymentSnap = await get(ref(db, `bank/paymentLinks/${params.paymentId}`));
+        if (!paymentSnap.exists()) {
+          showInvalidLink();
+          return false;
+        }
+
+        const paymentData = paymentSnap.val();
+        
+        // Проверить срок действия
+        if (paymentData.expiresAt && Date.now() > paymentData.expiresAt) {
+          showInvalidLink();
+          return false;
+        }
+
+        // Проверить статус
+        if (paymentData.status !== 'active') {
+          showInvalidLink();
+          return false;
+        }
+
+        currentPayment = {
+          id: params.paymentId,
+          amount: parseFloat(params.amount) || paymentData.amount,
+          currency: params.currency || paymentData.currency,
+          description: params.description || paymentData.description,
+          recipient: params.recipient || paymentData.recipient,
+          returnUrl: params.returnUrl || paymentData.returnUrl,
+          toAccount: params.toAccount || paymentData.toAccount,
+          ...paymentData
+        };
+
+        console.log('Загруженный платеж:', currentPayment);
+        console.log('Return URL из параметров:', params.returnUrl);
+        console.log('Return URL из базы:', paymentData.returnUrl);
+        console.log('Итоговый Return URL:', currentPayment.returnUrl);
+
+        return true;
+      } catch (error) {
+        console.error('Ошибка проверки ссылки:', error);
+        showInvalidLink();
+        return false;
+      }
+    }
+
+    function showInvalidLink() {
+      document.getElementById('invalidLink').style.display = 'block';
+      document.getElementById('paymentForm').style.display = 'none';
+    }
+
+    // Загрузка счетов пользователя
+    async function loadUserAccounts() {
+      try {
+        const accountsSnap = await get(ref(db, `bank/accounts/${currentUser.uid}/accounts`));
+        userAccounts = [];
+        
+        if (accountsSnap.exists()) {
+          for (const [accId, acc] of Object.entries(accountsSnap.val())) {
+            userAccounts.push({ id: accId, ...acc });
+          }
+        }
+
+        const accountSelect = document.getElementById('fromAccount');
+        accountSelect.innerHTML = '<option value="">Выберите счет</option>';
+        
+        userAccounts.forEach(account => {
+          const option = document.createElement('option');
+          option.value = account.id;
+          option.textContent = `${account.currency} (${account.balance.toFixed(2)}) [${account.accountNumber}]`;
+          option.dataset.currency = account.currency;
+          accountSelect.appendChild(option);
+        });
+
+        // Показать информацию о платеже
+        document.getElementById('paymentAmount').textContent = currentPayment.amount.toFixed(2);
+        document.getElementById('paymentCurrency').textContent = currentPayment.currency;
+        document.getElementById('recipientName').textContent = currentPayment.recipient;
+        document.getElementById('paymentDetails').textContent = currentPayment.description;
+        document.getElementById('paymentDescription').textContent = currentPayment.description;
+
+      } catch (error) {
+        console.error('Ошибка загрузки счетов:', error);
+        appendAlert('Ошибка загрузки счетов', 'danger');
+      }
+    }
+
+    // Обновление сводки платежа с конвертацией
+    async function updatePaymentSummary() {
+      const selectedOption = document.getElementById('fromAccount').options[document.getElementById('fromAccount').selectedIndex];
+      if (!selectedOption.value) {
+        document.getElementById('paymentSummary').style.display = 'none';
+        return;
+      }
+
+      const account = userAccounts.find(acc => acc.id === selectedOption.value);
+      if (!account) return;
+
+      const amount = currentPayment.amount;
+      
+      // Конвертация валют если нужно
+      let convertedAmount = amount;
+      let conversionFee = 0;
+      let totalAmount = amount;
+      let conversionInfo = '';
+      
+      if (account.currency !== currentPayment.currency) {
+        try {
+          // Предварительный расчёт без перевода в резервный счет
+          const conversion = await window.currencyConverter.convertWithFee(amount, currentPayment.currency, account.currency, null, false);
+          convertedAmount = conversion.convertedAmount;
+          conversionFee = conversion.fee;
+          totalAmount = conversion.total;
+          conversionInfo = `Курс: ${conversion.rate.toFixed(4)} (${currentPayment.currency}→${account.currency})`;
+        } catch (error) {
+          appendAlert('Ошибка конвертации валют', 'danger');
+          return;
+        }
+      }
+
+      // Комиссия за платеж считается от суммы в валюте счета
+      const paymentFee = (convertedAmount * paymentSettings.fee) / 100;
+      
+      // Конвертируем комиссии в EUR по курсу ЦБ для перевода в резервный счет
+      let paymentFeeEUR = 0;
+      let conversionFeeEUR = 0;
+      
+      if (account.currency !== 'EUR') {
+        try {
+          // Получаем курс ЦБ для конвертации комиссий в EUR
+          const currencyRates = await window.currencyConverter.getAllCurrencyObjects();
+          const accountCurrencyRate = currencyRates[account.currency];
+          
+          if (accountCurrencyRate && accountCurrencyRate.rate) {
+            // Конвертируем комиссии в EUR по курсу ЦБ
+            paymentFeeEUR = paymentFee / accountCurrencyRate.rate;
+            conversionFeeEUR = conversionFee / accountCurrencyRate.rate;
+          } else {
+            // Если нет курса ЦБ, используем обычную конвертацию
+            paymentFeeEUR = await window.currencyConverter.convert(paymentFee, account.currency, 'EUR');
+            conversionFeeEUR = await window.currencyConverter.convert(conversionFee, account.currency, 'EUR');
+          }
+        } catch (error) {
+          console.error('Ошибка конвертации комиссий в EUR:', error);
+          // Если не удалось конвертировать, оставляем в исходной валюте
+          paymentFeeEUR = paymentFee;
+          conversionFeeEUR = conversionFee;
+        }
+      } else {
+        paymentFeeEUR = paymentFee;
+        conversionFeeEUR = conversionFee;
+      }
+
+      const total = totalAmount + paymentFee;
+      const balanceAfter = account.balance - total;
+
+      // Очищаем предыдущую информацию о конвертации
+      const paymentSummary = document.getElementById('paymentSummary');
+      const existingConversionInfo = paymentSummary.querySelector('.alert-info');
+      if (existingConversionInfo) {
+        existingConversionInfo.remove();
+      }
+
+      document.getElementById('summaryAmount').textContent = convertedAmount.toFixed(2);
+      document.getElementById('summaryCurrency').textContent = account.currency;
+      document.getElementById('summaryFee').textContent = paymentFee.toFixed(2);
+      document.getElementById('summaryFeeCurrency').textContent = account.currency;
+      document.getElementById('summaryTotal').textContent = total.toFixed(2);
+      document.getElementById('summaryTotalCurrency').textContent = account.currency;
+      document.getElementById('summaryBalance').textContent = balanceAfter.toFixed(2);
+      document.getElementById('summaryBalanceCurrency').textContent = account.currency;
+
+      // Показать информацию о конвертации если была
+      if (conversionFee > 0) {
+        const conversionInfoDiv = document.createElement('div');
+        conversionInfoDiv.className = 'alert alert-info mt-2';
+        conversionInfoDiv.innerHTML = `
+          <small>
+            <i class="bi bi-arrow-left-right"></i>
+            Конвертация: ${amount.toFixed(2)} ${currentPayment.currency} → ${convertedAmount.toFixed(2)} ${account.currency}
+            <br>Комиссия за конвертацию: ${conversionFee.toFixed(2)} ${account.currency}
+            ${conversionInfo ? `<br>Курс: ${conversionInfo}` : ''}
+          </small>
+        `;
+        paymentSummary.appendChild(conversionInfoDiv);
+      }
+
+      // Сохраняем данные для использования при подтверждении
+      window.paymentSummaryData = {
+        convertedAmount,
+        paymentFee,
+        conversionFee,
+        total,
+        paymentFeeEUR,
+        conversionFeeEUR,
+        conversionInfo
+      };
+
+      document.getElementById('paymentSummary').style.display = 'block';
+    }
+
+    // Обработка изменения счета
+    document.getElementById('fromAccount').addEventListener('change', updatePaymentSummary);
+
+    // Обработка отправки формы
+    document.getElementById('paymentFormElement').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const fromAccountId = document.getElementById('fromAccount').value;
+      if (!fromAccountId) {
+        appendAlert('Выберите счет для списания', 'warning');
+        return;
+      }
+
+      const account = userAccounts.find(acc => acc.id === fromAccountId);
+      if (!account) {
+        appendAlert('Счет не найден', 'danger');
+        return;
+      }
+
+      // Используем данные из paymentSummaryData
+      const summaryData = window.paymentSummaryData;
+      if (!summaryData) {
+        appendAlert('Ошибка расчета платежа', 'danger');
+        return;
+      }
+
+      const { convertedAmount, paymentFee, conversionFee, total, paymentFeeEUR, conversionFeeEUR } = summaryData;
+
+      if (total > account.balance) {
+        appendAlert('Недостаточно средств на счете', 'danger');
+        return;
+      }
+
+      // Показать модалку подтверждения
+      const confirmDetails = document.getElementById('confirmPaymentDetails');
+      let detailsHtml = `
+        <div class="border rounded p-3 bg-light">
+          <p><strong>Сумма:</strong> ${convertedAmount.toFixed(2)} ${account.currency}</p>
+          <p><strong>Комиссия за платеж:</strong> ${paymentFee.toFixed(2)} ${account.currency}</p>
+      `;
+      
+      if (conversionFee > 0) {
+        detailsHtml += `<p><strong>Комиссия за конвертацию:</strong> ${conversionFee.toFixed(2)} ${account.currency}</p>`;
+      }
+      
+      detailsHtml += `
+          <p><strong>Итого:</strong> ${total.toFixed(2)} ${account.currency}</p>
+          <p><strong>Получатель:</strong> ${currentPayment.recipient}</p>
+          <p><strong>Описание:</strong> ${currentPayment.description}</p>
+        </div>
+      `;
+      
+      confirmDetails.innerHTML = detailsHtml;
+
+      const modal = new bootstrap.Modal(document.getElementById('confirmPaymentModal'));
+      modal.show();
+
+      // Сохранить данные для подтверждения
+      window.pendingPayment = {
+        fromAccountId,
+        account,
+        amount: convertedAmount,
+        paymentFee,
+        conversionFee,
+        total,
+        paymentFeeEUR,
+        conversionFeeEUR
+      };
+    });
+
+    // Подтверждение платежа
+    document.getElementById('confirmPaymentBtn').addEventListener('click', async function() {
+      const password = document.getElementById('confirmPassword').value;
+      if (!password) {
+        appendAlert('Введите пароль', 'warning');
+        return;
+      }
+
+      const btn = this;
+      const spinner = document.getElementById('confirmLoadingSpinner');
+      btn.disabled = true;
+      spinner.classList.add('show');
+
+      try {
+        // Проверить пароль
+        await signInWithEmailAndPassword(auth, currentUser.email, password);
+        
+        const payment = window.pendingPayment;
+        
+        // Выполнить платеж
+        const paymentId = push(ref(db, 'bank/payments/history')).key;
+        
+        await update(ref(db, `bank/accounts/${currentUser.uid}/accounts/${payment.fromAccountId}`), {
+          balance: payment.account.balance - payment.total
+        });
+
+        // Записать в историю
+        await set(ref(db, `bank/payments/history/${paymentId}`), {
+          userId: currentUser.uid,
+          userEmail: currentUser.email,
+          fromAccountId: payment.fromAccountId,
+          fromAccountNumber: payment.account.accountNumber,
+          amount: payment.amount,
+          paymentFee: payment.paymentFee,
+          conversionFee: payment.conversionFee,
+          paymentFeeEUR: payment.paymentFeeEUR,
+          conversionFeeEUR: payment.conversionFeeEUR,
+          total: payment.total,
+          currency: payment.account.currency,
+          originalCurrency: currentPayment.currency,
+          originalAmount: currentPayment.amount,
+          description: currentPayment.description,
+          recipientName: currentPayment.recipient,
+          paymentLinkId: currentPayment.id,
+          status: 'completed',
+          date: Date.now()
+        });
+
+        // Записать в историю операций счета
+        const transactionId = push(ref(db, `bank/accounts/${currentUser.uid}/accounts/${payment.fromAccountId}/transactions`)).key;
+        await set(ref(db, `bank/accounts/${currentUser.uid}/accounts/${payment.fromAccountId}/transactions/${transactionId}`), {
+          type: 'payment',
+          amount: -payment.total,
+          description: `Платеж: ${currentPayment.description}`,
+          recipient: currentPayment.recipient,
+          date: Date.now(),
+          paymentId: paymentId
+        });
+
+        // Найти получателя и перевести деньги
+        let recipientFound = false;
+        if (currentPayment.toAccount) {
+          const accountsSnap = await get(ref(db, 'bank/accounts'));
+          if (accountsSnap.exists()) {
+            for (const [uid, userAccs] of Object.entries(accountsSnap.val())) {
+              if (userAccs.accounts) {
+                for (const [accId, acc] of Object.entries(userAccs.accounts)) {
+                  if (String(acc.accountNumber) === currentPayment.toAccount.replace(/-/g, '')) {
+                    // Нашли получателя - переводим деньги
+                    const recipientAmount = payment.amount; // Сумма без комиссий
+                    
+                    await update(ref(db, `bank/accounts/${uid}/accounts/${accId}`), {
+                      balance: acc.balance + recipientAmount
+                    });
+                    
+                    // Записываем транзакцию получателю
+                    const recipientTransactionId = push(ref(db, `bank/accounts/${uid}/accounts/${accId}/transactions`)).key;
+                    await set(ref(db, `bank/accounts/${uid}/accounts/${accId}/transactions/${recipientTransactionId}`), {
+                      type: 'payment_received',
+                      amount: recipientAmount,
+                      description: `Получен платеж: ${currentPayment.description}`,
+                      sender: currentUser.email,
+                      date: Date.now(),
+                      paymentId: paymentId
+                    });
+                    
+                    recipientFound = true;
+                    console.log(`Деньги переведены получателю: ${uid}, счет: ${accId}, сумма: ${recipientAmount}`);
+                    break;
+                  }
+                }
+                if (recipientFound) break;
+              }
+            }
+          }
+        }
+        
+        // Если получатель не найден, деньги идут в банк
+        if (!recipientFound) {
+          console.log('Получатель не найден, деньги переводятся в банк');
+          
+          // Найти или создать счет банка в валюте платежа
+          const bankAccountsSnap = await get(ref(db, 'bank/accounts/BANK/accounts'));
+          let bankAccount = null;
+          let bankAccountId = null;
+          
+          if (bankAccountsSnap.exists()) {
+            const bankAccounts = bankAccountsSnap.val();
+            for (const [accId, acc] of Object.entries(bankAccounts)) {
+              if (acc.currency === payment.account.currency) {
+                bankAccount = acc;
+                bankAccountId = accId;
+                break;
+              }
+            }
+          }
+          
+          if (bankAccount) {
+            // Пополняем существующий счет банка
+            await update(ref(db, `bank/accounts/BANK/accounts/${bankAccountId}`), {
+              balance: bankAccount.balance + payment.amount
+            });
+          } else {
+            // Создаем новый счет банка
+            const newBankAccountId = push(ref(db, 'bank/accounts/BANK/accounts')).key;
+            await set(ref(db, `bank/accounts/BANK/accounts/${newBankAccountId}`), {
+              accountNumber: `BANK${Date.now()}`,
+              currency: payment.account.currency,
+              balance: payment.amount,
+              type: 'bank',
+              createdAt: Date.now()
+            });
+            bankAccountId = newBankAccountId;
+          }
+          
+          // Записываем транзакцию в банк
+          const bankTransactionId = push(ref(db, `bank/accounts/BANK/accounts/${bankAccountId}/transactions`)).key;
+          await set(ref(db, `bank/accounts/BANK/accounts/${bankAccountId}/transactions/${bankTransactionId}`), {
+            type: 'payment_received',
+            amount: payment.amount,
+            description: `Платеж (получатель не найден): ${currentPayment.description}`,
+            sender: currentUser.email,
+            date: Date.now(),
+            paymentId: paymentId
+          });
+        }
+
+        // Перевести комиссию за конвертацию в резервный счет (если была конвертация)
+        if (payment.conversionFee > 0) {
+          try {
+            await window.currencyConverter.transferToReserve(payment.conversionFee, payment.account.currency, currentUser.uid);
+          } catch (error) {
+            console.error('Ошибка перевода комиссии за конвертацию в резервный счет:', error);
+          }
+        }
+
+        // Обновить статус ссылки платежа
+        await update(ref(db, `bank/paymentLinks/${currentPayment.id}`), {
+          status: 'completed',
+          completedAt: Date.now(),
+          completedBy: currentUser.uid
+        });
+
+        // Пополнить резервный счет банка комиссиями в EUR
+        const reserveSnap = await get(ref(db, 'bank/accounts/BANK_RESERVE/accounts'));
+        if (reserveSnap.exists()) {
+          const reserveAccounts = reserveSnap.val();
+          let eurReserveAccount = null;
+          let eurReserveAccountId = null;
+          
+          // Ищем EUR резервный счет
+          for (const [accId, acc] of Object.entries(reserveAccounts)) {
+            if (acc.currency === 'EUR') {
+              eurReserveAccount = acc;
+              eurReserveAccountId = accId;
+              break;
+            }
+          }
+          
+          if (eurReserveAccount) {
+            // Переводим все комиссии в EUR резервный счет
+            const totalFeesEUR = payment.paymentFeeEUR + payment.conversionFeeEUR;
+            
+            await update(ref(db, `bank/accounts/BANK_RESERVE/accounts/${eurReserveAccountId}`), {
+              balance: eurReserveAccount.balance + totalFeesEUR
+            });
+            
+            // Записываем транзакцию в резервный счет
+            const reserveTransactionId = push(ref(db, `bank/accounts/BANK_RESERVE/accounts/${eurReserveAccountId}/transactions`)).key;
+            await set(ref(db, `bank/accounts/BANK_RESERVE/accounts/${eurReserveAccountId}/transactions/${reserveTransactionId}`), {
+              type: 'payment_fees',
+              amount: totalFeesEUR,
+              currency: 'EUR',
+              description: `Комиссии за платеж: ${currentPayment.description}`,
+              userId: currentUser.uid,
+              paymentId: paymentId,
+              paymentFeeEUR: payment.paymentFeeEUR,
+              conversionFeeEUR: payment.conversionFeeEUR,
+              date: Date.now()
+            });
+            
+            console.log(`Комиссии ${totalFeesEUR.toFixed(2)} EUR переведены в резервный счет`);
+          } else {
+            console.warn('EUR резервный счет не найден');
+          }
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('confirmPaymentModal')).hide();
+        appendAlert('Платеж успешно выполнен!', 'success');
+        
+        // Показываем окно успешной оплаты
+        showSuccessPayment(payment);
+
+      } catch (error) {
+        console.error('Ошибка платежа:', error);
+        if (error.code === 'auth/wrong-password') {
+          appendAlert('Неверный пароль', 'danger');
+        } else {
+          appendAlert('Ошибка выполнения платежа', 'danger');
+        }
+      } finally {
+        btn.disabled = false;
+        spinner.classList.remove('show');
+        document.getElementById('confirmPassword').value = '';
+      }
+    });
+
+    // Выход
+    document.getElementById('logout-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      try {
+        await signOut(auth);
+        window.location.href = '../../main.html';
+      } catch (error) {
+        console.error('Ошибка выхода:', error);
+      }
+    });
+
+    // Слушатель состояния авторизации
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        currentUser = user;
+        document.getElementById('user-email').textContent = user.email;
+        
+        // Загрузить настройки платежей
+        const settingsSnap = await get(ref(db, 'bank/payments/settings'));
+        paymentSettings = settingsSnap.exists() ? settingsSnap.val() : {
+          fee: 2.5,
+          minAmount: 10,
+          maxAmount: 10000
+        };
+
+        // Проверить валидность ссылки
+        const isValid = await validatePaymentLink();
+        if (isValid) {
+          document.getElementById('paymentForm').style.display = 'block';
+          await loadUserAccounts();
+        }
+      } else {
+        window.location.href = '../../main.html';
+      }
+    });
+
+    // Функция для показа окна успешной оплаты
+    function showSuccessPayment(paymentData) {
+      // Заполняем данные в модалке
+      document.getElementById('successAmount').textContent = `${paymentData.amount.toFixed(2)} ${paymentData.account.currency}`;
+      document.getElementById('successRecipient').textContent = currentPayment.recipient;
+      document.getElementById('successDescription').textContent = currentPayment.description;
+      
+      // Показываем секцию с return URL если есть
+      const returnUrlSection = document.getElementById('returnUrlSection');
+      const successModalFooter = document.getElementById('successModalFooter');
+      console.log('Return URL:', currentPayment.returnUrl); // Отладочная информация
+      
+      if (currentPayment.returnUrl) {
+        returnUrlSection.style.display = 'block';
+        
+        // Скрываем кнопку "Вернуться в банк" если есть return URL
+        successModalFooter.style.display = 'none';
+        
+        // Подготавливаем URL для валидации - добавляем протокол если его нет
+        let urlToValidate = currentPayment.returnUrl;
+        if (!urlToValidate.startsWith('http://') && !urlToValidate.startsWith('https://')) {
+          urlToValidate = 'https://' + urlToValidate;
+        }
+        
+        // Проверяем валидность URL
+        try {
+          new URL(urlToValidate);
+          console.log('Return URL валиден:', urlToValidate);
+          // Сохраняем подготовленный URL для использования
+          currentPayment.validatedReturnUrl = urlToValidate;
+        } catch (error) {
+          console.error('Return URL невалиден:', currentPayment.returnUrl, error);
+          // Если URL невалиден, скрываем секцию с переходом и показываем кнопку банка
+          returnUrlSection.style.display = 'none';
+          successModalFooter.style.display = 'block';
+          return;
+        }
+        
+        // --- ДОБАВЛЯЕМ ПАРАМЕТРЫ К URL ---
+        function buildReturnUrlWithParams() {
+          const params = new URLSearchParams({
+            amount: currentPayment.amount,
+            description: currentPayment.description,
+            paymentId: currentPayment.id
+          });
+          let redirectUrl = currentPayment.validatedReturnUrl;
+          if (redirectUrl.includes('?')) {
+            redirectUrl += '&' + params.toString();
+          } else {
+            redirectUrl += '?' + params.toString();
+          }
+          return redirectUrl;
+        }
+        
+        // Запускаем таймер
+        let countdown = 10;
+        const countdownElement = document.getElementById('countdown');
+        
+        const timer = setInterval(() => {
+          countdown--;
+          countdownElement.textContent = countdown;
+          
+          if (countdown <= 0) {
+            clearInterval(timer);
+            console.log('Автоматический переход по URL:', currentPayment.validatedReturnUrl);
+            window.location.href = buildReturnUrlWithParams();
+          }
+        }, 1000);
+        
+        // Сохраняем timer для возможности отмены
+        window.successPaymentTimer = timer;
+      } else {
+        returnUrlSection.style.display = 'none';
+        successModalFooter.style.display = 'block';
+      }
+      
+      // Показываем модалку
+      const modal = new bootstrap.Modal(document.getElementById('successPaymentModal'));
+      modal.show();
+      
+      // Добавляем обработчики кнопок после показа модалки
+      const goToReturnUrlBtn = document.getElementById('goToReturnUrl');
+      const goToBankBtn = document.getElementById('goToBank');
+      
+      // Удаляем старые обработчики если есть
+      goToReturnUrlBtn.replaceWith(goToReturnUrlBtn.cloneNode(true));
+      goToBankBtn.replaceWith(goToBankBtn.cloneNode(true));
+      
+      // Добавляем новые обработчики
+      document.getElementById('goToReturnUrl').addEventListener('click', function() {
+        console.log('Кнопка "Перейти сейчас" нажата, URL:', currentPayment.validatedReturnUrl);
+        if (window.successPaymentTimer) {
+          clearInterval(window.successPaymentTimer);
+        }
+        
+        // Используем уже валидированный URL
+        if (currentPayment.validatedReturnUrl) {
+          window.location.href = buildReturnUrlWithParams();
+        } else {
+          console.error('Валидированный URL отсутствует');
+          appendAlert('Ошибка перехода по ссылке: неверный URL', 'danger');
+        }
+      });
+
+      document.getElementById('goToBank').addEventListener('click', function() {
+        console.log('Кнопка "Вернуться в банк" нажата');
+        if (window.successPaymentTimer) {
+          clearInterval(window.successPaymentTimer);
+        }
+        window.location.href = '../bank.html';
+      });
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="./currency-converter.js"></script>
+</body>
+</html> 

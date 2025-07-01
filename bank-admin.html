@@ -1,0 +1,1479 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ARTEnet Bank — Администрирование</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%);
+        min-height: 100vh;
+      }
+      .admin-card {
+        background: #fff;
+        border-radius: 1.5rem;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        padding: 2rem 2.5rem;
+        margin: 2rem auto;
+        max-width: 900px;
+      }
+      .admin-badge {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+        background: #2563eb;
+        border-radius: 0.5rem;
+        padding: 0.2rem 0.7rem;
+      }
+      .account-num {
+        font-family: monospace;
+        font-size: 1.1rem;
+        color: #64748b;
+      }
+      .nav-pills .nav-link.active {
+        background: #2563eb;
+      }
+      .currency-badge {
+        font-family: monospace;
+        font-size: 1.1rem;
+        background: #e0e7ff;
+        color: #2563eb;
+        border-radius: 0.5rem;
+        padding: 0.2rem 0.7rem;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary shadow-sm">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="bank.html">
+          <img src="logo-color-2.png" alt="ARTEnet" height="32" class="d-inline-block align-text-top me-2">
+          ARTEnet Bank — Администрирование
+        </a>
+        <div class="collapse navbar-collapse">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link" href="bank.html">Банк</a>
+            </li>
+          </ul>
+          <span class="navbar-text me-3" id="user-id"></span>
+          <form class="d-flex" id="logout-form">
+            <button class="btn btn-outline-danger" type="submit">Выйти</button>
+          </form>
+        </div>
+      </div>
+    </nav>
+    <div id="liveAlertPlaceholder" class="position-fixed" style="z-index:1080; top:1rem; right:1rem; max-width:350px;"></div>
+    <main class="d-flex flex-column align-items-center justify-content-center" style="min-height:80vh;">
+      <div class="admin-card w-100">
+        <ul class="nav nav-pills mb-4" id="adminTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-requests" data-bs-toggle="pill" data-bs-target="#pane-requests" type="button" role="tab">Заявки</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-accounts" data-bs-toggle="pill" data-bs-target="#pane-accounts" type="button" role="tab">Счета</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-currencies" data-bs-toggle="pill" data-bs-target="#pane-currencies" type="button" role="tab">Валюты</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-payments" data-bs-toggle="pill" data-bs-target="#pane-payments" type="button" role="tab">Ссылки для платежей</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-settings" data-bs-toggle="pill" data-bs-target="#pane-settings" type="button" role="tab">Настройки</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-users" data-bs-toggle="pill" data-bs-target="#pane-users" type="button" role="tab">Пользователи</button>
+          </li>
+        </ul>
+        <div class="tab-content" id="adminTabContent">
+          <div class="tab-pane fade show active" id="pane-requests" role="tabpanel">
+            <h4 class="mb-3">Заявки на открытие счёта</h4>
+            <div id="requestsList"></div>
+          </div>
+          <div class="tab-pane fade" id="pane-accounts" role="tabpanel">
+            <h4 class="mb-3">Счета пользователей</h4>
+            <input type="text" class="form-control mb-2" id="accountsSearchInput" placeholder="Поиск по email, имени, фамилии, номеру счёта...">
+            <div id="accountsList"></div>
+          </div>
+          <div class="tab-pane fade" id="pane-currencies" role="tabpanel">
+            <h4 class="mb-3">Валюты и курсы</h4>
+            <!-- Управление курсами: убрано обновление по ЦБ -->
+            <div class="row mb-4">
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="mb-0">Управление курсами</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label for="conversionTax" class="form-label">Налог на конвертацию (%)</label>
+                      <input type="number" class="form-control" id="conversionTax" min="0" max="10" step="0.01" value="0.5">
+                      <div class="form-text">Процент комиссии за конвертацию валют</div>
+                    </div>
+                    <button class="btn btn-success" id="saveConversionTaxBtn">Сохранить налог</button>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="mb-0">Информация о курсах</h6>
+                  </div>
+                  <div class="card-body">
+                    <div id="ratesInfo">
+                      <p class="text-muted">Загрузка информации...</p>
+                    </div>
+                    <div class="mt-3">
+                      <small class="text-secondary">
+                        <strong>Как работает система:</strong><br>
+                        • Добавляйте валюты через форму ниже<br>
+                        • Курсы задаются вручную<br>
+                        • Налог на конвертацию взимается с суммы после конвертации<br>
+                        • Разница между курсом и комиссией идет в резервный счет<br>
+                        • EUR является базовой валютой и не может быть удалена
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="currenciesList"></div>
+            <button class="btn btn-outline-primary mt-3" id="addCurrencyBtn">Добавить валюту</button>
+          </div>
+          <div class="tab-pane fade" id="pane-payments" role="tabpanel">
+            <h4 class="mb-3">Ссылки для платежей</h4>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="mb-0">Создать новую ссылку</h6>
+                  </div>
+                  <div class="card-body">
+                    <form id="createPaymentLinkForm">
+                      <div class="mb-3">
+                        <label for="linkAmount" class="form-label">Сумма платежа</label>
+                        <input type="number" class="form-control" id="linkAmount" min="0" step="0.01" required>
+                      </div>
+                      <div class="mb-3">
+                        <label for="linkCurrency" class="form-label">Валюта</label>
+                        <select class="form-select" id="linkCurrency" required>
+                          <option value="EUR">EUR</option>
+                          <option value="USD">USD</option>
+                          <option value="RUB">RUB</option>
+                        </select>
+                      </div>
+                      <div class="mb-3">
+                        <label for="linkDescription" class="form-label">Описание платежа</label>
+                        <input type="text" class="form-control" id="linkDescription" required>
+                      </div>
+                      <div class="mb-3">
+                        <label for="linkRecipient" class="form-label">Получатель</label>
+                        <input type="text" class="form-control" id="linkRecipient" required>
+                      </div>
+                      <div class="mb-3">
+                        <label for="linkReturnUrl" class="form-label">URL возврата (необязательно)</label>
+                        <input type="url" class="form-control" id="linkReturnUrl" placeholder="https://example.com/success">
+                      </div>
+                      <div class="mb-3">
+                        <label for="linkExpiresAt" class="form-label">Срок действия (необязательно)</label>
+                        <input type="datetime-local" class="form-control" id="linkExpiresAt">
+                      </div>
+                      <button type="submit" class="btn btn-success">Создать ссылку</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="mb-0">Настройки системы</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label for="paymentsFee" class="form-label">Комиссия за платеж (%)</label>
+                      <input type="number" class="form-control" id="paymentsFee" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="mb-3">
+                      <label for="paymentsMinAmount" class="form-label">Минимальная сумма платежа</label>
+                      <input type="number" class="form-control" id="paymentsMinAmount" min="0" step="0.01">
+                    </div>
+                    <div class="mb-3">
+                      <label for="paymentsMaxAmount" class="form-label">Максимальная сумма платежа</label>
+                      <input type="number" class="form-control" id="paymentsMaxAmount" min="0" step="0.01">
+                    </div>
+                    <button class="btn btn-primary" id="savePaymentsSettings">Сохранить настройки</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-4">
+              <h5>Активные ссылки</h5>
+              <div id="paymentLinksList">
+                <div class="text-center text-secondary">Загрузка ссылок...</div>
+              </div>
+            </div>
+            <div class="mt-4">
+              <h5>История платежей</h5>
+              <div id="paymentsHistory">
+                <div class="text-center text-secondary">Загрузка истории...</div>
+              </div>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="pane-settings" role="tabpanel">
+            <h4 class="mb-3">Настройки банка</h4>
+            <div class="mb-3">
+              <label for="feePercent" class="form-label">Налог на перевод (%)</label>
+              <input type="number" class="form-control w-auto d-inline-block" id="feePercent" min="0" max="100" step="0.01" style="width:100px;">
+              <button class="btn btn-success ms-2" id="saveFeeBtn">Сохранить</button>
+            </div>
+            <div class="mb-3">
+              <label for="newAccountFee" class="form-label">Цена открытия нового счёта (EUR)</label>
+              <input type="number" class="form-control w-auto d-inline-block" id="newAccountFee" min="0" step="0.01" style="width:100px;">
+              <button class="btn btn-success ms-2" id="saveNewAccountFeeBtn">Сохранить</button>
+            </div>
+            <div class="mb-3 border rounded p-3 bg-light">
+              <h5 class="mb-2">Резервный счёт банка</h5>
+              <div id="bankReserveInfo"></div>
+              <form id="bankReserveForm" class="row g-2 align-items-end mt-2">
+                <div class="col-auto">
+                  <label class="form-label">Пополнить/Списать</label>
+                  <input type="number" class="form-control" id="bankReserveAmount" step="0.01">
+                </div>
+                <div class="col-auto">
+                  <button type="submit" class="btn btn-primary">Выполнить</button>
+                </div>
+              </form>
+              <div class="mt-3 border-top pt-3">
+                <h6 class="mb-2">Перевод с резервного счёта</h6>
+                <form id="bankReserveTransferForm" class="row g-2 align-items-end">
+                  <div class="col-auto">
+                    <label class="form-label">Номер счёта получателя</label>
+                    <input type="text" class="form-control" id="reserveToAccount" placeholder="XXXX-XXXX-XXXX" pattern="\\d{4}-\\d{4}-\\d{4}">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label">Сумма</label>
+                    <input type="number" class="form-control" id="reserveTransferAmount" step="0.01" min="0.01">
+                  </div>
+                  <div class="col-auto">
+                    <button type="submit" class="btn btn-success">Перевести</button>
+                  </div>
+                </form>
+                <div id="reserveTransferInfo" class="mt-2"></div>
+              </div>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="pane-users" role="tabpanel">
+            <h4 class="mb-3">Пользователи</h4>
+            <input type="text" class="form-control mb-2" id="userSearchInput" placeholder="Поиск по email, имени, фамилии или номеру счёта...">
+            <div id="usersList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Модалка редактирования счёта -->
+      <div class="modal fade" id="editAccountModal" tabindex="-1" aria-labelledby="editAccountModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <form class="modal-content" id="editAccountForm">
+            <div class="modal-header">
+              <h5 class="modal-title" id="editAccountModalLabel">Редактировать счёт</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-2">
+                <label class="form-label">Имя</label>
+                <input type="text" class="form-control" id="editFirstName" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Фамилия</label>
+                <input type="text" class="form-control" id="editLastName" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Город</label>
+                <input type="text" class="form-control" id="editCity" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Страна</label>
+                <input type="text" class="form-control" id="editCountry" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Валюта</label>
+                <select class="form-select" id="editCurrency" required></select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Баланс</label>
+                <input type="number" class="form-control" id="editBalance" required step="0.01">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Статус</label>
+                <select class="form-select" id="editStatus">
+                  <option value="active">Активен</option>
+                  <option value="blocked">Заблокирован</option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Номер счёта</label>
+                <input type="text" class="form-control" id="editAccountNumber" readonly>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-danger me-auto" id="deleteAccountBtn">Удалить счёт</button>
+              <button type="submit" class="btn btn-success">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модалка редактирования валюты -->
+      <div class="modal fade" id="editCurrencyModal" tabindex="-1" aria-labelledby="editCurrencyModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <form class="modal-content" id="editCurrencyForm">
+            <div class="modal-header">
+              <h5 class="modal-title" id="editCurrencyModalLabel">Редактировать валюту</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-2">
+                <label class="form-label">Код валюты (например, EUR)</label>
+                <input type="text" class="form-control" id="currencyCode" required maxlength="6">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Название</label>
+                <input type="text" class="form-control" id="currencyName" required>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Базовая валюта для отображения курсов</label>
+                <select class="form-select" id="currencyBase" required>
+                  <option value="EUR">EUR (Евро)</option>
+                  <option value="USD">USD (Доллар США)</option>
+                  <option value="RUB">RUB (Рубль)</option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Курс ЦБ (официальный курс)</label>
+                <input type="number" class="form-control" id="currencyRate" required step="0.0001">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Курс покупки (buy)</label>
+                <input type="number" class="form-control" id="currencyBuy" required step="0.0001">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Курс продажи (sell)</label>
+                <input type="number" class="form-control" id="currencySell" required step="0.0001">
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-danger me-auto" id="deleteCurrencyBtn">Удалить валюту</button>
+              <button type="submit" class="btn btn-success">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модалка просмотра пользователя -->
+      <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="userModalLabel">Информация о пользователе</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+              <div id="userInfo"></div>
+              <hr>
+              <h6>Счета пользователя:</h6>
+              <div id="userAccounts"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <footer class="bg-body-tertiary text-center text-lg-start mt-4 border-top">
+      <div class="container p-3">
+        <div class="row align-items-center">
+          <div class="col-lg-6 text-lg-start text-center mb-2 mb-lg-0">
+            <span class="fw-bold">ARTEnet &copy; 2025</span>
+          </div>
+          <div class="col-lg-6 text-lg-end text-center">
+            <a href="mailto:ltartenet@gmail.com" class="text-decoration-none text-secondary me-3">Поддержка</a>
+            <a href="#" class="text-decoration-none text-secondary disabled">Политика конфиденциальности</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+    <script src="currency-converter.js"></script>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+      import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+      import { getDatabase, ref, get, set, remove, update, push } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyBZkU-HmTgsFV7McrsDr-Q5WkEBxkA2SD0",
+        authDomain: "artenetshop-7b884.firebaseapp.com",
+        projectId: "artenetshop-7b884",
+        storageBucket: "artenetshop-7b884.appspot.com",
+        messagingSenderId: "542098227452",
+        appId: "1:542098227452:web:ce14dfbbbd7ca0d34b5779",
+        measurementId: "G-8PDLBR77YN",
+        databaseURL: "https://artenetshop-7b884-default-rtdb.europe-west1.firebasedatabase.app"
+      };
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getDatabase(app);
+
+      // Инициализация конвертера с базой данных
+      if (window.currencyConverter) {
+        window.currencyConverter.initDatabase(db);
+        window.currencyConverter.loadRatesFromAdmin();
+        window.currencyConverter.loadConversionTax();
+      }
+
+      const alertPlaceholder = document.getElementById('liveAlertPlaceholder');
+      function appendAlert(message, type = 'info') {
+        const wrapper = document.createElement('div');
+        wrapper.className = `alert alert-${type} alert-dismissible fade show`;
+        wrapper.role = 'alert';
+        wrapper.innerHTML = `
+          <div>${message}</div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        alertPlaceholder.append(wrapper);
+        setTimeout(() => {
+          wrapper.classList.remove("show");
+          setTimeout(() => wrapper.remove(), 150);
+        }, 7000);
+      }
+
+      let currentUser = null;
+      let isAdmin = false;
+
+      onAuthStateChanged(auth, async (user) => {
+        if (!user || !user.emailVerified) {
+          window.location.href = "index.html";
+          return;
+        }
+        currentUser = user;
+        document.getElementById('user-id').textContent = user.email || user.uid;
+        // Проверка isAdmin
+        const userDbSnap = await get(ref(db, `users/${user.uid}`));
+        isAdmin = userDbSnap.exists() && userDbSnap.val().isAdmin === true;
+        if (!isAdmin) {
+          appendAlert('Доступ только для администраторов!', 'danger');
+          setTimeout(() => window.location.href = "bank.html", 2000);
+          return;
+        }
+        loadRequests();
+      });
+
+      async function loadRequests() {
+        const list = document.getElementById('requestsList');
+        list.innerHTML = '<div class="text-center text-secondary">Загрузка...</div>';
+        const reqSnap = await get(ref(db, 'bank/accountRequests'));
+        if (!reqSnap.exists()) {
+          list.innerHTML = '<div class="alert alert-success text-center">Нет новых заявок</div>';
+          return;
+        }
+        const requests = reqSnap.val();
+        let html = '';
+        for (const [uid, req] of Object.entries(requests)) {
+          html += `<div class="card mb-3 shadow-sm">
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-8">
+                  <div><b>Имя:</b> ${req.firstName} ${req.lastName}</div>
+                  <div><b>Город:</b> ${req.city}</div>
+                  <div><b>Страна:</b> ${req.country}</div>
+                  <div><b>Email:</b> ${req.email || '—'}</div>
+                  <div><b>UID:</b> <span class="account-num">${uid}</span></div>
+                  <div><b>Дата заявки:</b> ${req.createdAt ? new Date(req.createdAt).toLocaleString() : '—'}</div>
+                </div>
+                <div class="col-md-4 d-flex flex-column align-items-end justify-content-center gap-2">
+                  <button class="btn btn-success mb-1" onclick="window.approveAccount('${uid}')">Одобрить</button>
+                  <button class="btn btn-outline-danger" onclick="window.rejectAccount('${uid}')">Отклонить</button>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        }
+        list.innerHTML = html;
+      }
+
+      // Генерация номера счёта (12 цифр, формат XXXX-XXXX-XXXX)
+      function generateAccountNumber() {
+        let num = '';
+        for (let i = 0; i < 12; i++) num += Math.floor(Math.random() * 10);
+        return num;
+      }
+
+      window.approveAccount = async (uid) => {
+        console.log('approveAccount: start, uid =', uid);
+        // Получаем заявку
+        try {
+          const reqSnap = await get(ref(db, `bank/accountRequests/${uid}`));
+          console.log('approveAccount: get accountRequests', reqSnap.exists(), reqSnap.val());
+          if (!reqSnap.exists()) {
+            appendAlert('Заявка не найдена', 'danger');
+            return;
+          }
+          const req = reqSnap.val();
+          // UID пользователя (до _ если есть)
+          const realUid = uid.includes('_') ? uid.split('_')[0] : uid;
+          
+          // Получить данные из первого счёта для города и страны
+          let city = req.city || '';
+          let country = req.country || '';
+          let firstName = req.firstName || '';
+          let lastName = req.lastName || '';
+          
+          // Если это второй счёт (есть _ в uid), берём данные из первого счёта
+          if (uid.includes('_')) {
+            const existingAccsSnap = await get(ref(db, `bank/accounts/${realUid}/accounts`));
+            if (existingAccsSnap.exists()) {
+              const existingAccs = Object.values(existingAccsSnap.val());
+              if (existingAccs.length > 0) {
+                const firstAcc = existingAccs[0];
+                city = firstAcc.city || '';
+                country = firstAcc.country || '';
+                firstName = firstAcc.firstName || '';
+                lastName = firstAcc.lastName || '';
+              }
+            }
+          }
+          
+          // Проверяем, нет ли уже счёта с таким номером (можно разрешить несколько счетов)
+          // const accsSnap = await get(ref(db, `bank/accounts/${realUid}/accounts`));
+          // Генерируем уникальный номер счёта
+          let accNum;
+          let unique = false;
+          while (!unique) {
+            accNum = generateAccountNumber();
+            const allAccs = await get(ref(db, 'bank/accounts'));
+            console.log('approveAccount: get all accounts', allAccs.exists(), allAccs.val());
+            unique = true;
+            if (allAccs.exists()) {
+              for (const userAccs of Object.values(allAccs.val())) {
+                if (userAccs.accounts) {
+                  for (const acc of Object.values(userAccs.accounts)) {
+                    if (String(acc.accountNumber) === accNum) {
+                      unique = false;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          // Создаём счёт по новой структуре
+          const { push } = await import('https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js');
+          const newAccRef = push(ref(db, `bank/accounts/${realUid}/accounts`));
+          console.log('Путь для записи:', `bank/accounts/${realUid}/accounts`);
+          await set(newAccRef, {
+            accountNumber: accNum,
+            balance: 0,
+            createdAt: Date.now(),
+            firstName: firstName,
+            lastName: lastName,
+            city: city,
+            country: country,
+            email: req.email || '',
+            currency: req.currency || 'EUR',
+            status: 'active'
+          });
+          console.log('approveAccount: account created');
+          await remove(ref(db, `bank/accountRequests/${uid}`));
+          console.log('approveAccount: accountRequests removed');
+          appendAlert('Счёт успешно создан!', 'success');
+          loadRequests();
+        } catch (e) {
+          console.error('approveAccount: error', e);
+          appendAlert('Ошибка: ' + e.message, 'danger');
+        }
+      };
+
+      window.rejectAccount = async (uid) => {
+        try {
+          // Получить данные заявки перед удалением
+          const reqSnap = await get(ref(db, `bank/accountRequests/${uid}`));
+          if (reqSnap.exists()) {
+            const req = reqSnap.val();
+            
+            // Если это заявка на новый счёт (есть payFrom) и была списана комиссия
+            if (req.payFrom) {
+              const realUid = uid.includes('_') ? uid.split('_')[0] : uid;
+              const payFromAccountId = req.payFrom;
+              
+              // Получить комиссию за открытие нового счёта
+              const newAccountFeeSnap = await get(ref(db, 'bank/newAccountFee'));
+              const fee = newAccountFeeSnap.exists() ? parseFloat(newAccountFeeSnap.val()) : 0;
+              
+              if (fee > 0) {
+                // Получить текущий баланс счёта
+                const accountSnap = await get(ref(db, `bank/accounts/${realUid}/accounts/${payFromAccountId}`));
+                if (accountSnap.exists()) {
+                  const account = accountSnap.val();
+                  const newBalance = Math.round((account.balance + fee) * 100) / 100;
+                  
+                  // Вернуть комиссию
+                  await update(ref(db, `bank/accounts/${realUid}/accounts/${payFromAccountId}`), {
+                    balance: newBalance
+                  });
+                  
+                  // Записать возврат комиссии в историю
+                  const { push } = await import('https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js');
+                  const historyRef = ref(db, `bank/accounts/${realUid}/accounts/${payFromAccountId}/history`);
+                  await push(historyRef, {
+                    type: 'refund',
+                    amount: fee,
+                    description: 'Возврат комиссии за отклонённую заявку на новый счёт',
+                    date: Date.now()
+                  });
+                }
+              }
+            }
+          }
+          
+          // Удалить заявку
+          await remove(ref(db, `bank/accountRequests/${uid}`));
+          appendAlert('Заявка отклонена. Комиссия возвращена.', 'info');
+          loadRequests();
+        } catch (e) {
+          console.error('rejectAccount: error', e);
+          appendAlert('Ошибка при отклонении заявки: ' + e.message, 'danger');
+        }
+      };
+
+      document.getElementById("logout-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        signOut(auth)
+          .then(() => {
+            window.location.href = "index.html";
+          })
+          .catch((error) => {
+            appendAlert("Ошибка выхода: " + error.message, "danger");
+          });
+      });
+
+      async function loadCurrenciesToSelect(selectId, selected) {
+        const curSnap = await get(ref(db, 'bank/currencies'));
+        const select = document.getElementById(selectId);
+        select.innerHTML = '';
+        if (curSnap.exists()) {
+          for (const [code, data] of Object.entries(curSnap.val())) {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = `${code} (${data.name || ''})`;
+            if (selected && selected === code) option.selected = true;
+            select.appendChild(option);
+          }
+        } else {
+          const option = document.createElement('option');
+          option.value = 'EUR';
+          option.textContent = 'EUR';
+          select.appendChild(option);
+        }
+      }
+
+      // Реализовать функцию для редактирования валюты:
+      window.editCurrencyModal = async function(code) {
+        const currencySnap = await get(ref(db, `bank/currencies/${code}`));
+        if (!currencySnap.exists()) {
+          appendAlert('Валюта не найдена', 'danger');
+          return;
+        }
+        
+        const currency = currencySnap.val();
+        document.getElementById('currencyCode').value = code;
+        document.getElementById('currencyName').value = currency.name || '';
+        document.getElementById('currencyBase').value = currency.base || 'EUR';
+        document.getElementById('currencyRate').value = currency.rate || 1;
+        document.getElementById('currencyBuy').value = currency.buy || currency.rate || 1;
+        document.getElementById('currencySell').value = currency.sell || currency.rate || 1;
+        
+        const modal = new bootstrap.Modal(document.getElementById('editCurrencyModal'));
+        modal.show();
+        
+        document.getElementById('editCurrencyForm').onsubmit = async (e) => {
+          e.preventDefault();
+          const newCode = document.getElementById('currencyCode').value.trim().toUpperCase();
+          const name = document.getElementById('currencyName').value.trim();
+          const base = document.getElementById('currencyBase').value;
+          const rate = parseFloat(document.getElementById('currencyRate').value);
+          const buy = parseFloat(document.getElementById('currencyBuy').value);
+          const sell = parseFloat(document.getElementById('currencySell').value);
+          
+          if (!newCode || !name || isNaN(rate) || isNaN(buy) || isNaN(sell)) {
+            appendAlert('Заполните все поля корректно', 'warning');
+            return;
+          }
+          
+          try {
+            // Если код валюты изменился, удалить старую и создать новую
+            if (newCode !== code) {
+              await remove(ref(db, `bank/currencies/${code}`));
+            }
+            
+            // Сохранить валюту
+            await set(ref(db, `bank/currencies/${newCode}`), { 
+              name, 
+              base, 
+              rate, 
+              buy, 
+              sell,
+              updatedAt: Date.now()
+            });
+            
+            // Обновить конвертер
+            await window.currencyConverter.loadRatesFromAdmin();
+            
+            modal.hide();
+            renderCurrenciesList();
+            appendAlert(`Валюта ${newCode} обновлена`, 'success');
+          } catch (error) {
+            console.error('Ошибка обновления валюты:', error);
+            appendAlert('Ошибка обновления валюты', 'danger');
+          }
+        };
+        
+        document.getElementById('deleteCurrencyBtn').onclick = async function() {
+          if (!confirm(`Удалить валюту ${code}?`)) return;
+          
+          try {
+            await remove(ref(db, `bank/currencies/${code}`));
+            
+            // Обновить конвертер
+            await window.currencyConverter.loadRatesFromAdmin();
+            
+            modal.hide();
+            renderCurrenciesList();
+            appendAlert(`Валюта ${code} удалена`, 'success');
+          } catch (error) {
+            console.error('Ошибка удаления валюты:', error);
+            appendAlert('Ошибка удаления валюты', 'danger');
+          }
+        };
+      };
+
+      // window.deleteCurrency реализовать аналогично: удаляет валюту и обновляет список
+      window.deleteCurrency = async function(code) {
+        if (!confirm(`Удалить валюту ${code}?`)) return;
+        
+        try {
+          await remove(ref(db, `bank/currencies/${code}`));
+          
+          // Обновить конвертер
+          await window.currencyConverter.loadRatesFromAdmin();
+          
+          renderCurrenciesList();
+          appendAlert(`Валюта ${code} удалена`, 'success');
+        } catch (error) {
+          console.error('Ошибка удаления валюты:', error);
+          appendAlert('Ошибка удаления валюты', 'danger');
+        }
+      };
+
+      async function renderCurrenciesList() {
+        const list = document.getElementById('currenciesList');
+        list.innerHTML = '<div class="text-center text-secondary">Загрузка...</div>';
+        // Получаем все валюты-объекты
+        const currencyObjs = await window.currencyConverter.getAllCurrencyObjects();
+        const lastUpdate = new Date().toLocaleString('ru-RU');
+        const conversionTax = window.currencyConverter.conversionTax;
+        document.getElementById('conversionTax').value = conversionTax;
+        // Информация о курсах
+        const ratesInfo = document.getElementById('ratesInfo');
+        ratesInfo.innerHTML = `
+          <p><strong>Последнее обновление:</strong> ${lastUpdate}</p>
+          <p><strong>Налог на конвертацию:</strong> ${conversionTax}%</p>
+          <p><strong>Активных валют:</strong> ${Object.keys(currencyObjs).length}</p>
+          <p><strong>Поддерживаемые валюты:</strong> ${Object.keys(currencyObjs).join(', ')}</p>
+        `;
+        // Фильтруем только корректные валюты (есть rate)
+        const validCurrencies = Object.entries(currencyObjs).filter(([code, obj]) => obj && typeof obj === 'object' && obj.rate !== undefined);
+        if (validCurrencies.length === 0) {
+          list.innerHTML = `<div class="alert alert-info text-center"><h6>Валюты не настроены</h6><p>Добавьте валюты через форму ниже, чтобы начать работу с курсами.</p></div>`;
+          return;
+        }
+        let html = '<div class="table-responsive"><table class="table table-bordered table-hover">';
+        html += '<thead class="table-light"><tr><th>Код</th><th>Название</th><th>Курс ЦБ (к EUR)</th><th>Курс покупки</th><th>Курс продажи</th><th>Действия</th></tr></thead><tbody>';
+        for (const [code, obj] of validCurrencies) {
+          html += `
+            <tr>
+              <td><strong>${code}</strong></td>
+              <td>${obj.name || code}</td>
+              <td>${obj.rate !== undefined ? Number(obj.rate).toFixed(4) : '-'}</td>
+              <td class="text-success">${obj.buy !== undefined ? Number(obj.buy).toFixed(4) : '-'}</td>
+              <td class="text-danger">${obj.sell !== undefined ? Number(obj.sell).toFixed(4) : '-'}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="window.editCurrencyModal('${code}')" title="Редактировать">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="window.deleteCurrency('${code}')" title="Удалить">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }
+        html += '</tbody></table></div>';
+        list.innerHTML = html;
+      }
+
+      // Сохранение налога на конвертацию
+      document.getElementById('saveConversionTaxBtn').addEventListener('click', async function() {
+        const tax = parseFloat(document.getElementById('conversionTax').value);
+        
+        if (isNaN(tax) || tax < 0 || tax > 10) {
+          appendAlert('Налог должен быть от 0 до 10%', 'warning');
+          return;
+        }
+        
+        try {
+          await set(ref(db, 'bank/conversionTax'), tax);
+          
+          // Обновить налог в конвертере
+          window.currencyConverter.conversionTax = tax;
+          
+          await renderCurrenciesList();
+          appendAlert('Налог на конвертацию сохранен', 'success');
+        } catch (error) {
+          console.error('Ошибка сохранения налога:', error);
+          appendAlert('Ошибка сохранения налога', 'danger');
+        }
+      });
+
+      // При открытии вкладки 'Валюты':
+      document.getElementById('tab-currencies').addEventListener('click', renderCurrenciesList);
+      renderCurrenciesList();
+
+      // При загрузке страницы:
+      (async function(){
+        const feeSnap = await get(ref(db, 'bank/feePercent'));
+        if (feeSnap.exists()) document.getElementById('feePercent').value = feeSnap.val();
+        const newFeeSnap = await get(ref(db, 'bank/newAccountFee'));
+        if (newFeeSnap.exists()) document.getElementById('newAccountFee').value = newFeeSnap.val();
+        
+        // Загрузить настройки онлайн-платежей
+        const settingsSnap = await get(ref(db, 'bank/payments/settings'));
+        if (settingsSnap.exists()) {
+          const settings = settingsSnap.val();
+          document.getElementById('paymentsFee').value = settings.fee || 0;
+          document.getElementById('paymentsMinAmount').value = settings.minAmount || 0;
+          document.getElementById('paymentsMaxAmount').value = settings.maxAmount || 0;
+        }
+      })();
+
+      // Сохранение настроек онлайн-платежей
+      document.getElementById('savePaymentsSettings').onclick = async function() {
+        const fee = parseFloat(document.getElementById('paymentsFee').value) || 0;
+        const minAmount = parseFloat(document.getElementById('paymentsMinAmount').value) || 0;
+        const maxAmount = parseFloat(document.getElementById('paymentsMaxAmount').value) || 0;
+
+        await set(ref(db, 'bank/payments/settings'), {
+          fee,
+          minAmount,
+          maxAmount,
+          updatedAt: Date.now()
+        });
+        appendAlert('Настройки сохранены', 'success');
+      };
+
+      // Создание ссылки для платежа
+      document.getElementById('createPaymentLinkForm').onsubmit = async function(e) {
+        e.preventDefault();
+        
+        const amount = parseFloat(document.getElementById('linkAmount').value);
+        const currency = document.getElementById('linkCurrency').value;
+        const description = document.getElementById('linkDescription').value.trim();
+        const recipient = document.getElementById('linkRecipient').value.trim();
+        const returnUrl = document.getElementById('linkReturnUrl').value.trim();
+        const expiresAt = document.getElementById('linkExpiresAt').value;
+
+        if (!amount || amount <= 0 || !description || !recipient) {
+          appendAlert('Заполните все обязательные поля', 'warning');
+          return;
+        }
+
+        const paymentId = push(ref(db, 'bank/paymentLinks')).key;
+        const expiresAtTimestamp = expiresAt ? new Date(expiresAt).getTime() : null;
+
+        await set(ref(db, `bank/paymentLinks/${paymentId}`), {
+          amount,
+          currency,
+          description,
+          recipient,
+          returnUrl: returnUrl || null,
+          expiresAt: expiresAtTimestamp,
+          status: 'active',
+          createdAt: Date.now(),
+          createdBy: currentUser.uid
+        });
+
+        // Создать ссылку для оплаты
+        const paymentUrl = `${window.location.origin}/apps/bank/payments.html?payment=${paymentId}`;
+        
+        // Показать ссылку
+        const linkHtml = `
+          <div class="alert alert-success">
+            <h6>Ссылка создана!</h6>
+            <p><strong>Ссылка для оплаты:</strong></p>
+            <div class="input-group">
+              <input type="text" class="form-control" value="${paymentUrl}" readonly>
+              <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText('${paymentUrl}')">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+            <small class="text-muted">ID платежа: ${paymentId}</small>
+          </div>
+        `;
+        
+        document.getElementById('createPaymentLinkForm').insertAdjacentHTML('afterend', linkHtml);
+        document.getElementById('createPaymentLinkForm').reset();
+        
+        // Удалить уведомление через 10 секунд
+        setTimeout(() => {
+          const alert = document.querySelector('.alert-success');
+          if (alert) alert.remove();
+        }, 10000);
+
+        renderPaymentLinks();
+        appendAlert('Ссылка для платежа создана', 'success');
+      };
+
+      // Отображение списка ссылок платежей
+      async function renderPaymentLinks() {
+        const list = document.getElementById('paymentLinksList');
+        list.innerHTML = '<div class="text-center text-secondary">Загрузка...</div>';
+        
+        const linksSnap = await get(ref(db, 'bank/paymentLinks'));
+        if (!linksSnap.exists()) {
+          list.innerHTML = '<div class="alert alert-info text-center">Ссылки не найдены</div>';
+          return;
+        }
+
+        const links = Object.entries(linksSnap.val())
+          .map(([id, link]) => ({ id, ...link }))
+          .sort((a, b) => b.createdAt - a.createdAt);
+
+        let html = '<div class="table-responsive"><table class="table table-bordered table-sm">';
+        html += '<thead><tr><th>ID</th><th>Сумма</th><th>Получатель</th><th>Описание</th><th>Статус</th><th>Создана</th><th>Действия</th></tr></thead><tbody>';
+        
+        for (const link of links) {
+          const isExpired = link.expiresAt && Date.now() > link.expiresAt;
+          const status = isExpired ? 'expired' : link.status;
+          const statusClass = status === 'active' ? 'success' : status === 'completed' ? 'primary' : 'secondary';
+          const statusText = status === 'active' ? 'Активна' : status === 'completed' ? 'Оплачена' : 'Истекла';
+          
+          const createdDate = new Date(link.createdAt).toLocaleString('ru-RU');
+          const paymentUrl = `${window.location.origin}/apps/bank/payments.html?payment=${link.id}`;
+          
+          html += `
+            <tr>
+              <td><code>${link.id}</code></td>
+              <td>${link.amount} ${link.currency}</td>
+              <td>${link.recipient}</td>
+              <td>${link.description}</td>
+              <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+              <td>${createdDate}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="copyPaymentLink('${paymentUrl}')" title="Копировать ссылку">
+                  <i class="bi bi-link"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deletePaymentLink('${link.id}')" title="Удалить">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }
+        
+        html += '</tbody></table></div>';
+        list.innerHTML = html;
+      }
+
+      // Копирование ссылки платежа
+      window.copyPaymentLink = async function(url) {
+        try {
+          await navigator.clipboard.writeText(url);
+          appendAlert('Ссылка скопирована в буфер обмена', 'success');
+        } catch (error) {
+          // Fallback для старых браузеров
+          const textArea = document.createElement('textarea');
+          textArea.value = url;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          appendAlert('Ссылка скопирована в буфер обмена', 'success');
+        }
+      };
+
+      // Удаление ссылки платежа
+      window.deletePaymentLink = async function(linkId) {
+        if (!confirm('Удалить эту ссылку для платежа?')) return;
+        
+        await remove(ref(db, `bank/paymentLinks/${linkId}`));
+        renderPaymentLinks();
+        appendAlert('Ссылка удалена', 'success');
+      };
+
+      // Отображение истории платежей
+      async function renderPaymentsHistory() {
+        const history = document.getElementById('paymentsHistory');
+        history.innerHTML = '<div class="text-center text-secondary">Загрузка истории...</div>';
+        
+        const historySnap = await get(ref(db, 'bank/payments/history'));
+        if (!historySnap.exists()) {
+          history.innerHTML = '<div class="alert alert-info text-center">История платежей пуста</div>';
+          return;
+        }
+
+        const payments = Object.entries(historySnap.val())
+          .map(([id, payment]) => ({ id, ...payment }))
+          .sort((a, b) => b.date - a.date);
+
+        let html = '<div class="table-responsive"><table class="table table-bordered table-sm">';
+        html += '<thead><tr><th>Дата</th><th>Пользователь</th><th>Сумма</th><th>Получатель</th><th>Описание</th><th>Статус</th></tr></thead><tbody>';
+        
+        for (const payment of payments) {
+          const date = new Date(payment.date).toLocaleString('ru-RU');
+          const statusClass = payment.status === 'completed' ? 'success' : 'warning';
+          const statusText = payment.status === 'completed' ? 'Выполнен' : 'В обработке';
+          
+          html += `
+            <tr>
+              <td>${date}</td>
+              <td>${payment.userEmail}</td>
+              <td>${payment.amount} ${payment.currency}</td>
+              <td>${payment.recipientName}</td>
+              <td>${payment.description}</td>
+              <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+            </tr>
+          `;
+        }
+        
+        html += '</tbody></table></div>';
+        history.innerHTML = html;
+      }
+
+      // Загрузка данных при переключении на вкладку платежей
+      document.getElementById('tab-payments').addEventListener('click', () => {
+        renderPaymentLinks();
+        renderPaymentsHistory();
+      });
+
+      // Сохранение комиссии
+      document.getElementById('saveFeeBtn').onclick = async function() {
+        const fee = parseFloat(document.getElementById('feePercent').value);
+        if (isNaN(fee)) return;
+        await set(ref(db, 'bank/feePercent'), fee);
+        appendAlert('Комиссия сохранена', 'success');
+      };
+
+      // Сохранение цены открытия нового счёта
+      document.getElementById('saveNewAccountFeeBtn').onclick = async function() {
+        const fee = parseFloat(document.getElementById('newAccountFee').value);
+        if (isNaN(fee)) return;
+        await set(ref(db, 'bank/newAccountFee'), fee);
+        appendAlert('Цена открытия нового счёта сохранена', 'success');
+      };
+
+      window.openUserModal = async function(uid) {
+        const userInfoDiv = document.getElementById('userInfo');
+        const userAccountsDiv = document.getElementById('userAccounts');
+        userInfoDiv.innerHTML = '<div class="text-secondary">Загрузка...</div>';
+        userAccountsDiv.innerHTML = '';
+        const userSnap = await get(ref(db, `users/${uid}`));
+        if (!userSnap.exists()) {
+          userInfoDiv.innerHTML = '<div class="alert alert-danger">Пользователь не найден</div>';
+          return;
+        }
+        const user = userSnap.val();
+        userInfoDiv.innerHTML = `<b>Email:</b> ${user.email || ''}<br><b>Имя:</b> ${user.firstName || ''} ${user.lastName || ''}<br><b>UID:</b> <span class="account-num">${uid}</span>`;
+        // Счета
+        const accsSnap = await get(ref(db, `bank/accounts/${uid}/accounts`));
+        if (!accsSnap.exists()) {
+          userAccountsDiv.innerHTML = '<div class="alert alert-warning">Нет счетов</div>';
+        } else {
+          let html = '<table class="table table-bordered"><thead><tr><th>Номер</th><th>Валюта</th><th>Баланс</th><th>Статус</th></tr></thead><tbody>';
+          for (const [accId, acc] of Object.entries(accsSnap.val())) {
+            html += `<tr><td>${formatAccountNumber(acc.accountNumber)}</td><td>${acc.currency||''}</td><td>${acc.balance}</td><td>${acc.status||'active'}</td></tr>`;
+          }
+          html += '</tbody></table>';
+          userAccountsDiv.innerHTML = html;
+        }
+        const modal = new bootstrap.Modal(document.getElementById('userModal'));
+        modal.show();
+      };
+
+      async function renderUsersList(filter = '') {
+        const list = document.getElementById('usersList');
+        list.innerHTML = '<div class="text-center text-secondary">Загрузка...</div>';
+        const usersSnap = await get(ref(db, 'users'));
+        if (!usersSnap.exists()) {
+          list.innerHTML = '<div class="alert alert-warning text-center">Пользователи не найдены</div>';
+          return;
+        }
+        const users = usersSnap.val();
+        let html = '<ul class="list-group">';
+        for (const [uid, user] of Object.entries(users)) {
+          let searchStr = (user.email||'') + ' ' + (user.firstName||'') + ' ' + (user.lastName||'') + ' ' + uid;
+          if (filter && !searchStr.toLowerCase().includes(filter.toLowerCase())) continue;
+          html += `<li class="list-group-item list-group-item-action" onclick="window.openUserModal('${uid}')">${user.email || uid} <span class='text-secondary small ms-2'>${user.firstName||''} ${user.lastName||''}</span></li>`;
+        }
+        html += '</ul>';
+        list.innerHTML = html;
+      }
+      document.getElementById('tab-users').addEventListener('click', ()=>renderUsersList());
+      document.getElementById('userSearchInput').addEventListener('input', e => renderUsersList(e.target.value));
+
+      // Резервный счёт банка (BANK_RESERVE)
+      async function renderBankReserve() {
+        const accsSnap = await get(ref(db, 'bank/accounts/BANK_RESERVE/accounts'));
+        let html = '';
+        if (accsSnap.exists()) {
+          for (const [accId, acc] of Object.entries(accsSnap.val())) {
+            html += `<div><b>Номер:</b> ${formatAccountNumber(acc.accountNumber)} <b>Валюта:</b> ${acc.currency} <b>Баланс:</b> ${(acc.balance||0).toFixed(2)}</div>`;
+          }
+          document.getElementById('bankReserveForm').style.display = '';
+        } else {
+          // Форма создания резервного счёта
+          html = `<form id='createReserveForm' class='row g-2 align-items-end'>
+            <div class='col-auto'>
+              <label class='form-label'>Валюта</label>
+              <select class='form-select' id='reserveCurrency'></select>
+            </div>
+            <div class='col-auto'>
+              <label class='form-label'>Номер счёта</label>
+              <input type='text' class='form-control' id='reserveAccountNumber' maxlength='16' required>
+            </div>
+            <div class='col-auto'>
+              <label class='form-label'>Начальный баланс</label>
+              <input type='number' class='form-control' id='reserveStartBalance' step='0.01' value='0'>
+            </div>
+            <div class='col-auto'>
+              <button type='submit' class='btn btn-success'>Создать резервный счёт</button>
+            </div>
+          </form>`;
+          document.getElementById('bankReserveForm').style.display = 'none';
+        }
+        document.getElementById('bankReserveInfo').innerHTML = html;
+        // Если нет счёта — подгрузить валюты и обработчик
+        if (!accsSnap.exists()) {
+          const curSnap = await get(ref(db, 'bank/currencies'));
+          const select = document.getElementById('reserveCurrency');
+          select.innerHTML = '';
+          if (curSnap.exists()) {
+            for (const [code, data] of Object.entries(curSnap.val())) {
+              const option = document.createElement('option');
+              option.value = code;
+              option.textContent = `${code} (${data.name || ''})`;
+              select.appendChild(option);
+            }
+          } else {
+            select.innerHTML = '<option value="EUR">EUR</option>';
+          }
+          document.getElementById('createReserveForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const currency = document.getElementById('reserveCurrency').value;
+            const accountNumber = document.getElementById('reserveAccountNumber').value.trim();
+            let balance = parseFloat(document.getElementById('reserveStartBalance').value);
+            if (!currency || !accountNumber || isNaN(balance)) return;
+            balance = Math.round(balance * 100) / 100;
+            const { push } = await import('https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js');
+            const newAccRef = push(ref(db, 'bank/accounts/BANK_RESERVE/accounts'));
+            await set(newAccRef, {
+              accountNumber,
+              balance,
+              createdAt: Date.now(),
+              currency,
+              status: 'active',
+              firstName: 'BANK',
+              lastName: 'RESERVE',
+              city: '',
+              country: '',
+              email: ''
+            });
+            renderBankReserve();
+            document.getElementById('bankReserveForm').style.display = '';
+            appendAlert('Резервный счёт создан', 'success');
+          };
+          // Добавляем форматирование для поля номера счёта
+          document.getElementById('reserveAccountNumber').addEventListener('input', function() {
+            formatAccountNumberInput(this);
+          });
+        }
+      }
+      document.getElementById('tab-settings').addEventListener('click', renderBankReserve);
+      document.getElementById('bankReserveForm').onsubmit = async function(e) {
+        e.preventDefault();
+        let amount = parseFloat(document.getElementById('bankReserveAmount').value);
+        if (isNaN(amount) || amount === 0) return;
+        amount = Math.round(amount * 100) / 100;
+        const accsSnap = await get(ref(db, 'bank/accounts/BANK_RESERVE/accounts'));
+        if (!accsSnap.exists()) return;
+        const [accId, acc] = Object.entries(accsSnap.val())[0];
+        const newBalance = Math.round(((acc.balance || 0) + amount) * 100) / 100;
+        await set(ref(db, `bank/accounts/BANK_RESERVE/accounts/${accId}`), {
+          ...acc,
+          balance: newBalance
+        });
+        renderBankReserve();
+        appendAlert('Операция выполнена', 'success');
+      };
+      // Перевод с резервного счёта
+      document.getElementById('reserveToAccount').addEventListener('input', async function() {
+        formatAccountNumberInput(this);
+        const toAccount = this.value.replace(/-/g, '');
+        const infoDiv = document.getElementById('reserveTransferInfo');
+        if (toAccount.length !== 12) {
+          infoDiv.innerHTML = '';
+          return;
+        }
+        const accsSnap = await get(ref(db, 'bank/accounts'));
+        let found = false;
+        if (accsSnap.exists()) {
+          for (const [uid, userAccs] of Object.entries(accsSnap.val())) {
+            if (userAccs.accounts) {
+              for (const [accId, acc] of Object.entries(userAccs.accounts)) {
+                if (String(acc.accountNumber) === toAccount) {
+                  infoDiv.innerHTML = `<span class='text-success'>Получатель: ${acc.firstName || ''} ${acc.lastName || ''} (${acc.currency})</span>`;
+                  found = true;
+                }
+              }
+            }
+          }
+        }
+        if (!found) infoDiv.innerHTML = `<span class='text-danger'>Счёт не найден</span>`;
+      });
+      document.getElementById('bankReserveTransferForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const toAccountRaw = document.getElementById('reserveToAccount').value;
+        const toAccount = toAccountRaw.replace(/-/g, '');
+        const amount = parseFloat(document.getElementById('reserveTransferAmount').value);
+        if (!toAccount || toAccount.length !== 12 || isNaN(amount) || amount <= 0) {
+          appendAlert('Введите корректные данные!', 'warning');
+          return;
+        }
+        // Найти получателя
+        const accsSnap = await get(ref(db, 'bank/accounts'));
+        let toUid = null, toAccountKey = null, toAcc = null;
+        if (accsSnap.exists()) {
+          for (const [uid, userAccs] of Object.entries(accsSnap.val())) {
+            if (userAccs.accounts) {
+              for (const [accId, acc] of Object.entries(userAccs.accounts)) {
+                if (String(acc.accountNumber) === toAccount) {
+                  toUid = uid;
+                  toAccountKey = accId;
+                  toAcc = acc;
+                }
+              }
+            }
+          }
+        }
+        if (!toUid || !toAccountKey) {
+          appendAlert('Счёт получателя не найден', 'danger');
+          return;
+        }
+        // Найти резервный счёт
+        const reserveSnap = await get(ref(db, 'bank/accounts/BANK_RESERVE/accounts'));
+        if (!reserveSnap.exists()) {
+          appendAlert('Резервный счёт не найден', 'danger');
+          return;
+        }
+        const [reserveAccId, reserveAcc] = Object.entries(reserveSnap.val())[0];
+        const roundedAmount = Math.round(amount * 100) / 100;
+        if (reserveAcc.balance < roundedAmount) {
+          appendAlert('Недостаточно средств на резервном счёте', 'danger');
+          return;
+        }
+        // Выполнить перевод
+        try {
+          await update(ref(db), {
+            [`bank/accounts/BANK_RESERVE/accounts/${reserveAccId}/balance`]: Math.round((reserveAcc.balance - roundedAmount) * 100) / 100,
+            [`bank/accounts/${toUid}/accounts/${toAccountKey}/balance`]: Math.round(((toAcc.balance || 0) + roundedAmount) * 100) / 100
+          });
+          // История
+          const now = Date.now();
+          const reserveHistRef = ref(db, `bank/accounts/BANK_RESERVE/accounts/${reserveAccId}/history`);
+          const toHistRef = ref(db, `bank/accounts/${toUid}/accounts/${toAccountKey}/history`);
+          await push(reserveHistRef, {
+            type: 'transfer_out',
+            to: toAccount,
+            amount: roundedAmount,
+            date: now
+          });
+          await push(toHistRef, {
+            type: 'transfer_in',
+            from: 'BANK_RESERVE',
+            amount: roundedAmount,
+            date: now
+          });
+          renderBankReserve();
+          document.getElementById('bankReserveTransferForm').reset();
+          document.getElementById('reserveTransferInfo').innerHTML = '';
+          appendAlert('Перевод выполнен!', 'success');
+        } catch (e) {
+          appendAlert('Ошибка перевода: ' + e.message, 'danger');
+        }
+      };
+
+      // Автоматическое форматирование номера счёта
+      function formatAccountNumberInput(input) {
+        let value = input.value.replace(/\D/g, '');
+        if (value.length > 12) value = value.substring(0, 12);
+        if (value.length >= 8) {
+          value = value.substring(0, 4) + '-' + value.substring(4, 8) + '-' + value.substring(8);
+        } else if (value.length >= 4) {
+          value = value.substring(0, 4) + '-' + value.substring(4);
+        }
+        input.value = value;
+      }
+      
+      // Функция форматирования номера счёта для отображения
+      function formatAccountNumber(num) {
+        if (!num) return '—';
+        return String(num).replace(/(\d{4})(\d{4})(\d{4})/, '$1-$2-$3');
+      }
+
+      async function renderAccountsList(filter = '') {
+        const list = document.getElementById('accountsList');
+        list.innerHTML = '<div class="text-center text-secondary">Загрузка...';
+        const accsSnap = await get(ref(db, 'bank/accounts'));
+        const usersSnap = await get(ref(db, 'users'));
+        if (!accsSnap.exists()) {
+          list.innerHTML = '<div class="alert alert-warning text-center">Счета не найдены</div>';
+          return;
+        }
+        const users = usersSnap.exists() ? usersSnap.val() : {};
+        let allAccounts = [];
+        for (const [uid, userAccs] of Object.entries(accsSnap.val())) {
+          if (!userAccs.accounts) continue;
+          for (const [accId, acc] of Object.entries(userAccs.accounts)) {
+            allAccounts.push({
+              uid,
+              accId,
+              ...acc,
+              email: users[uid]?.email || '',
+              firstName: users[uid]?.firstName || '',
+              lastName: users[uid]?.lastName || ''
+            });
+          }
+        }
+        if (filter) {
+          allAccounts = allAccounts.filter(acc => (
+            (acc.email && acc.email.toLowerCase().includes(filter.toLowerCase())) ||
+            (acc.firstName && acc.firstName.toLowerCase().includes(filter.toLowerCase())) ||
+            (acc.lastName && acc.lastName.toLowerCase().includes(filter.toLowerCase())) ||
+            (acc.accountNumber && String(acc.accountNumber).includes(filter))
+          ));
+        }
+        let html = '<table class="table table-bordered table-sm"><thead><tr><th>Номер</th><th>Валюта</th><th>Баланс</th><th>Статус</th><th>Email</th><th>Имя</th><th>Фамилия</th><th>UID</th><th></th></tr></thead><tbody>';
+        for (const acc of allAccounts) {
+          html += `<tr><td>${formatAccountNumber(acc.accountNumber)}</td><td>${acc.currency||''}</td><td>${acc.balance}</td><td>${acc.status||'active'}</td><td>${acc.email}</td><td>${acc.firstName}</td><td>${acc.lastName}</td><td class='account-num'>${acc.uid}</td><td><button class='btn btn-sm btn-outline-primary' onclick='window.editAccountModalShow("${acc.uid}","${acc.accId}")'>✏️</button></td></tr>`;
+        }
+        html += '</tbody></table>';
+        list.innerHTML = html;
+      }
+      document.getElementById('tab-accounts').addEventListener('click', ()=>renderAccountsList());
+      document.getElementById('accountsSearchInput').addEventListener('input', e => renderAccountsList(e.target.value));
+
+      window.editAccountModalShow = async function(uid, accId) {
+        const accSnap = await get(ref(db, `bank/accounts/${uid}/accounts/${accId}`));
+        if (!accSnap.exists()) return;
+        const acc = accSnap.val();
+        document.getElementById('editFirstName').value = acc.firstName || '';
+        document.getElementById('editLastName').value = acc.lastName || '';
+        document.getElementById('editCity').value = acc.city || '';
+        document.getElementById('editCountry').value = acc.country || '';
+        await loadCurrenciesToSelect('editCurrency', acc.currency);
+        document.getElementById('editBalance').value = acc.balance || 0;
+        document.getElementById('editStatus').value = acc.status || 'active';
+        document.getElementById('editAccountNumber').value = acc.accountNumber || '';
+        document.getElementById('editAccountForm').onsubmit = async function(e) {
+          e.preventDefault();
+          await set(ref(db, `bank/accounts/${uid}/accounts/${accId}`), {
+            accountNumber: acc.accountNumber,
+            balance: parseFloat(document.getElementById('editBalance').value),
+            createdAt: acc.createdAt,
+            firstName: document.getElementById('editFirstName').value.trim(),
+            lastName: document.getElementById('editLastName').value.trim(),
+            city: document.getElementById('editCity').value.trim(),
+            country: document.getElementById('editCountry').value.trim(),
+            currency: document.getElementById('editCurrency').value,
+            status: document.getElementById('editStatus').value,
+            email: acc.email || ''
+          });
+          bootstrap.Modal.getInstance(document.getElementById('editAccountModal')).hide();
+          renderAccountsList(document.getElementById('accountsSearchInput').value);
+          appendAlert('Счёт сохранён', 'success');
+        };
+        document.getElementById('deleteAccountBtn').onclick = async function() {
+          if (!confirm('Удалить этот счёт?')) return;
+          await remove(ref(db, `bank/accounts/${uid}/accounts/${accId}`));
+          bootstrap.Modal.getInstance(document.getElementById('editAccountModal')).hide();
+          renderAccountsList(document.getElementById('accountsSearchInput').value);
+          appendAlert('Счёт удалён', 'info');
+        };
+        const modal = new bootstrap.Modal(document.getElementById('editAccountModal'));
+        modal.show();
+      }
+
+      document.getElementById('addCurrencyBtn').onclick = function() {
+        document.getElementById('currencyCode').value = '';
+        document.getElementById('currencyName').value = '';
+        document.getElementById('currencyBase').value = 'EUR';
+        document.getElementById('currencyRate').value = 1;
+        document.getElementById('currencyBuy').value = 1;
+        document.getElementById('currencySell').value = 1;
+        const modal = new bootstrap.Modal(document.getElementById('editCurrencyModal'));
+        modal.show();
+        document.getElementById('editCurrencyForm').onsubmit = async (e) => {
+          e.preventDefault();
+          const code = document.getElementById('currencyCode').value.trim().toUpperCase();
+          const name = document.getElementById('currencyName').value.trim();
+          const base = document.getElementById('currencyBase').value;
+          const rate = parseFloat(document.getElementById('currencyRate').value);
+          const buy = parseFloat(document.getElementById('currencyBuy').value);
+          const sell = parseFloat(document.getElementById('currencySell').value);
+          
+          if (!code || !name || isNaN(rate) || isNaN(buy) || isNaN(sell)) {
+            appendAlert('Заполните все поля корректно', 'warning');
+            return;
+          }
+          
+          if (code === 'EUR') {
+            appendAlert('EUR уже является базовой валютой', 'warning');
+            return;
+          }
+          
+          try {
+            // Добавить валюту в базу данных
+            await set(ref(db, `bank/currencies/${code}`), { 
+              name, 
+              base, 
+              rate, 
+              buy, 
+              sell,
+              addedAt: Date.now()
+            });
+            
+            // Обновить конвертер
+            await window.currencyConverter.loadRatesFromAdmin();
+            
+            modal.hide();
+            renderCurrenciesList();
+            appendAlert(`Валюта ${code} добавлена`, 'success');
+          } catch (error) {
+            console.error('Ошибка добавления валюты:', error);
+            appendAlert('Ошибка добавления валюты', 'danger');
+          }
+        };
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html> 
