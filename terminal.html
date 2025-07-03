@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARTEnet NFC Терминал</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f4f4; margin: 0; }
+        .terminal-container { max-width: 420px; margin: 0 auto; min-height: 100vh; background: #fff; box-shadow: 0 2px 16px #0002; border-radius: 0 0 18px 18px; position: relative; }
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 24px 24px 0 24px; }
+        .header h2 { margin: 0; font-size: 1.5em; }
+        .settings-btn { background: none; border: none; font-size: 1.7em; cursor: pointer; color: #1976d2; }
+        .step { display: none; min-height: 60vh; align-items: center; justify-content: center; flex-direction: column; }
+        .step.active { display: flex; }
+        .amount-form { width: 100%; max-width: 320px; margin: 0 auto; }
+        .amount-form label { font-size: 1.1em; margin-bottom: 8px; display: block; }
+        .amount-form input { width: 100%; padding: 16px; font-size: 1.3em; border-radius: 8px; border: 1px solid #bbb; margin-bottom: 18px; }
+        .amount-form button { width: 100%; padding: 16px; font-size: 1.2em; background: #1976d2; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+        .amount-form button:disabled { background: #aaa; }
+        .pay-card { background: #f7faff; border-radius: 18px; box-shadow: 0 2px 8px #1976d222; padding: 32px 24px; margin: 0 auto; text-align: center; max-width: 340px; }
+        .pay-card .sum { font-size: 2.2em; font-weight: bold; margin-bottom: 10px; }
+        .pay-card .recipient { font-size: 1.1em; color: #1976d2; margin-bottom: 18px; }
+        .pay-card .account { font-size: 1.1em; color: #333; margin-bottom: 8px; }
+        .pay-card .btn { margin-top: 18px; }
+        .nfc-anim { font-size: 3.5em; margin: 24px 0 12px 0; animation: nfc-pulse 1.2s infinite alternate; }
+        @keyframes nfc-pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
+        .pin-form input { width: 180px; padding: 16px; font-size: 1.5em; border-radius: 8px; border: 1px solid #bbb; text-align: center; }
+        .pin-form button { width: 180px; padding: 14px; font-size: 1.1em; background: #1976d2; color: #fff; border: none; border-radius: 8px; margin-top: 18px; }
+        .result-block { text-align: center; margin-top: 40px; }
+        .result-block .big { font-size: 2.2em; margin-bottom: 12px; }
+        .result-block .details { font-size: 1.1em; color: #1976d2; margin-bottom: 18px; }
+        .error, .success { text-align: center; font-size: 1.1em; margin: 18px 0 0 0; }
+        .error { color: #d32f2f; }
+        .success { color: #388e3c; }
+        /* Модалка */
+        .modal-bg { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100vw; height: 100vh; background: #0007; align-items: center; justify-content: center; }
+        .modal-bg.active { display: flex; }
+        .modal { background: #fff; border-radius: 14px; padding: 32px 24px; min-width: 320px; max-width: 90vw; box-shadow: 0 4px 24px #0003; }
+        .modal h3 { margin-top: 0; }
+        .modal input { width: 100%; padding: 12px; font-size: 1.1em; border-radius: 6px; border: 1px solid #bbb; margin-bottom: 18px; }
+        .modal .close-btn { background: #d32f2f; color: #fff; border: none; border-radius: 6px; padding: 10px 18px; font-size: 1em; cursor: pointer; float: right; }
+    </style>
+</head>
+<body>
+<div class="terminal-container">
+    <div class="header">
+        <h2>ARTEnet Терминал</h2>
+        <button class="settings-btn" id="openSettingsBtn" title="Настройки получателя">⚙</button>
+    </div>
+    <!-- Этап 1: Ввод суммы -->
+    <div class="step step-amount active">
+        <form class="amount-form" id="amountForm">
+            <label for="amount">Сумма к оплате:</label>
+            <input type="number" id="amount" min="1" step="1" placeholder="Введите сумму">
+            <label for="currencySelect">Валюта:</label>
+            <select id="currencySelect"></select>
+            <button type="submit">Далее</button>
+        </form>
+        <div class="error" id="errorMsg"></div>
+    </div>
+    <!-- Этап 2: Карточка оплаты -->
+    <div class="step step-paycard">
+        <div class="pay-card">
+            <div class="sum" id="paySum"></div>
+            <div class="recipient" id="payRecipient"></div>
+            <button class="btn" id="startNfcBtn">Оплатить</button>
+        </div>
+    </div>
+    <!-- Этап 3: Ожидание NFC -->
+    <div class="step step-nfc">
+        <div class="nfc-anim">📶</div>
+        <div class="result-block">
+            <div class="big">Приложите карту</div>
+            <div class="details" id="nfcDetails"></div>
+            <button id="cancelNfcBtn">Отмена</button>
+        </div>
+        <div class="error" id="nfcError"></div>
+    </div>
+    <!-- Этап 4: Ввод PIN-кода -->
+    <div class="step step-pin">
+        <form class="pin-form" id="pinForm">
+            <input type="password" id="pin" maxlength="6" placeholder="PIN-код">
+            <button type="submit">Подтвердить</button>
+        </form>
+        <div class="error" id="pinError"></div>
+    </div>
+    <!-- Этап 5: Результат -->
+    <div class="step step-result">
+        <div class="result-block">
+            <div class="big" id="resultMsg"></div>
+            <div class="details" id="resultDetails"></div>
+            <button id="newPaymentBtn">Новый платёж</button>
+        </div>
+    </div>
+    <!-- Модалка настроек -->
+    <div class="modal-bg" id="settingsModal">
+        <div class="modal">
+            <button class="close-btn" id="closeSettingsBtn">×</button>
+            <h3>Настройки получателя</h3>
+            <label for="recipient">Счёт/ID получателя:</label>
+            <input type="text" id="recipient" placeholder="Введите счёт или ID">
+            <button id="saveRecipientBtn">Сохранить</button>
+            <div class="success" id="recipientSavedMsg" style="display:none;">Получатель сохранён!</div>
+        </div>
+    </div>
+</div>
+<div id="debugConsole" style="position:fixed;left:0;right:0;bottom:0;max-height:180px;overflow:auto;background:#222;color:#eee;font-family:monospace;font-size:13px;padding:8px 12px;z-index:9999;display:none;"></div>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="terminal-logic.js" type="module"></script>
+</body>
+</html> 
