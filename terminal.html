@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARTEnet NFC Терминал</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+        .container { max-width: 400px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 32px 24px; }
+        h2 { text-align: center; }
+        .step { display: none; }
+        .step.active { display: block; }
+        .input-group { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 6px; }
+        input[type="number"], input[type="password"], input[type="text"] { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ccc; }
+        button { width: 100%; padding: 12px; background: #1976d2; color: #fff; border: none; border-radius: 5px; font-size: 1.1em; cursor: pointer; margin-top: 10px; }
+        button:disabled { background: #aaa; }
+        .settings { margin-top: 32px; padding: 16px; background: #f9f9f9; border-radius: 8px; }
+        .settings h3 { margin-top: 0; }
+        .result { text-align: center; font-size: 1.2em; margin-top: 20px; }
+        .error { color: #d32f2f; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>ARTEnet NFC Терминал</h2>
+    <!-- Этап 1: Ввод суммы -->
+    <div class="step step-amount active">
+        <div class="input-group">
+            <label for="amount">Сумма к оплате (₽):</label>
+            <input type="number" id="amount" min="1" step="1" placeholder="Введите сумму">
+        </div>
+        <button id="payBtn">Оплатить</button>
+    </div>
+    <!-- Этап 2: Приложите NFC-метку -->
+    <div class="step step-nfc">
+        <div class="result">Пожалуйста, приложите NFC-метку к телефону...</div>
+        <button id="cancelNfcBtn">Отмена</button>
+    </div>
+    <!-- Этап 3: Ввод PIN-кода -->
+    <div class="step step-pin">
+        <div class="input-group">
+            <label for="pin">Введите PIN-код:</label>
+            <input type="password" id="pin" maxlength="6" placeholder="PIN-код">
+        </div>
+        <button id="confirmPinBtn">Подтвердить</button>
+    </div>
+    <!-- Этап 4: Результат -->
+    <div class="step step-result">
+        <div class="result" id="resultMsg"></div>
+        <button id="newPaymentBtn">Новый платёж</button>
+    </div>
+    <div class="error" id="errorMsg"></div>
+    <!-- Настройки получателя -->
+    <div class="settings">
+        <h3>Настройки получателя</h3>
+        <div class="input-group">
+            <label for="recipient">Счёт/ID получателя:</label>
+            <input type="text" id="recipient" placeholder="Введите счёт или ID">
+        </div>
+        <button id="saveRecipientBtn">Сохранить получателя</button>
+        <div id="recipientSavedMsg" style="color:green; text-align:center; display:none;">Получатель сохранён!</div>
+    </div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="terminal-logic.js" type="module"></script>
+</body>
+</html> 
